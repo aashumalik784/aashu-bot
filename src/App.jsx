@@ -1,187 +1,178 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function App() {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "👋 Hi! मैं Aashu AI हूँ" }
-  ]);
+  const [messages, setMessages] = useState([]);
+
   const [typing, setTyping] = useState(false);
 
-  // 🎤 Voice Input
+  // 💾 LOAD CHAT FROM STORAGE
+  useEffect(() => {
+    const saved = localStorage.getItem("chat");
+    if (saved) setMessages(JSON.parse(saved));
+  }, []);
+
+  // 💾 SAVE CHAT
+  useEffect(() => {
+    localStorage.setItem("chat", JSON.stringify(messages));
+  }, [messages]);
+
+  // 🎤 VOICE INPUT
   const startVoice = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      alert("Voice not supported");
-      return;
-    }
+    if (!SpeechRecognition) return alert("Not supported");
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-IN";
 
-    recognition.onresult = (event) => {
-      setInput(event.results[0][0].transcript);
+    recognition.onresult = (e) => {
+      setInput(e.results[0][0].transcript);
     };
 
     recognition.start();
   };
 
-  // 🔊 Voice Output
+  // 🔊 SPEAK
   const speak = (text) => {
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "en-IN";
     speechSynthesis.speak(utter);
   };
 
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const userMessage = input;
-
     const newMessages = [
       ...messages,
-      { role: "user", content: userMessage }
+      { role: "user", content: input }
     ];
 
     setMessages(newMessages);
     setInput("");
     setTyping(true);
 
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages })
-      });
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: newMessages })
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      setTyping(false);
+    setTyping(false);
 
+    if (data.type === "image") {
+      setMessages([
+        ...newMessages,
+        { role: "assistant", content: data.reply, image: true }
+      ]);
+    } else {
       setMessages([
         ...newMessages,
         { role: "assistant", content: data.reply }
       ]);
-
       speak(data.reply);
-
-    } catch (err) {
-      setTyping(false);
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: "❌ Error in AI response" }
-      ]);
     }
   };
 
   return (
-    <div style={styles.container}>
+    <div className="app">
       
       {/* HEADER */}
-      <div style={styles.header}>🤖 Aashu AI (Gemini Style)</div>
+      <div className="header">🤖 Aashu AI PRO</div>
 
-      {/* CHAT BOX */}
-      <div style={styles.chat}>
+      {/* CHAT */}
+      <div className="chat">
         {messages.map((m, i) => (
           <div
             key={i}
-            style={{
-              ...styles.msg,
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              background: m.role === "user" ? "#DCF8C6" : "#f1f1f1"
-            }}
+            className={m.role === "user" ? "user" : "bot"}
           >
-            {m.content}
+            {m.image ? (
+              <img src={m.content} width="200" />
+            ) : (
+              m.content
+            )}
           </div>
         ))}
 
-        {/* ✨ TYPING INDICATOR */}
-        {typing && (
-          <div style={styles.typing}>
-            Aashu AI is typing...
-          </div>
-        )}
+        {typing && <div className="typing">AI is typing...</div>}
       </div>
 
-      {/* INPUT AREA */}
-      <div style={styles.inputBox}>
-        
-        <button onClick={startVoice} style={styles.mic}>
-          🎤
-        </button>
+      {/* INPUT */}
+      <div className="inputBox">
+        <button onClick={startVoice}>🎤</button>
 
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Message likho..."
-          style={styles.input}
+          placeholder="Ask anything..."
         />
 
-        <button onClick={sendMessage} style={styles.btn}>
-          ➤
-        </button>
+        <button onClick={sendMessage}>➤</button>
       </div>
+
+      {/* CSS */}
+      <style>{`
+        .app {
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          font-family: Arial;
+        }
+        .header {
+          padding: 15px;
+          font-size: 18px;
+          font-weight: bold;
+          border-bottom: 1px solid #ddd;
+        }
+        .chat {
+          flex: 1;
+          overflow-y: auto;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .user {
+          align-self: flex-end;
+          background: #DCF8C6;
+          padding: 10px;
+          border-radius: 10px;
+          max-width: 70%;
+        }
+        .bot {
+          align-self: flex-start;
+          background: #f1f1f1;
+          padding: 10px;
+          border-radius: 10px;
+          max-width: 70%;
+        }
+        .typing {
+          font-style: italic;
+          color: gray;
+        }
+        .inputBox {
+          display: flex;
+          padding: 10px;
+          border-top: 1px solid #ddd;
+        }
+        input {
+          flex: 1;
+          padding: 10px;
+          border-radius: 20px;
+          border: 1px solid #ccc;
+        }
+        button {
+          margin-left: 5px;
+          padding: 10px;
+          border-radius: 50%;
+          border: none;
+          background: black;
+          color: white;
+        }
+      `}</style>
     </div>
   );
-}
-
-const styles = {
-  container: {
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    fontFamily: "Arial"
-  },
-  header: {
-    padding: 15,
-    fontSize: 20,
-    fontWeight: "bold",
-    borderBottom: "1px solid #ddd"
-  },
-  chat: {
-    flex: 1,
-    padding: 10,
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10
-  },
-  msg: {
-    padding: 10,
-    borderRadius: 10,
-    maxWidth: "70%"
-  },
-  typing: {
-    fontStyle: "italic",
-    color: "gray"
-  },
-  inputBox: {
-    display: "flex",
-    padding: 10,
-    borderTop: "1px solid #ddd",
-    alignItems: "center"
-  },
-  input: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 20,
-    border: "1px solid #ccc",
-    marginLeft: 8
-  },
-  btn: {
-    marginLeft: 10,
-    padding: "10px 15px",
-    borderRadius: 20,
-    background: "black",
-    color: "white",
-    border: "none"
-  },
-  mic: {
-    padding: "10px 12px",
-    borderRadius: "50%",
-    border: "none",
-    background: "red",
-    color: "white"
-  }
-};
+      }
