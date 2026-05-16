@@ -1,4 +1,8 @@
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ reply: "Method not allowed" });
+  }
+
   const { message } = req.body;
 
   try {
@@ -19,13 +23,11 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    res.status(200).json({
-      reply: data.choices[0].message.content
-    });
+    const reply = data?.choices?.[0]?.message?.content || "No response";
 
-  } catch (error) {
-    res.status(500).json({
-      reply: "Error: AI not responding"
-    });
+    res.status(200).json({ reply });
+
+  } catch (err) {
+    res.status(500).json({ reply: "Server error" });
   }
 }
