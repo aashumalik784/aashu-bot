@@ -3,12 +3,15 @@ import { useState, useEffect } from "react";
 export default function App() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
-  const [lang, setLang] = useState("hi");
+  const [userName, setUserName] = useState("");
 
   // 💾 LOAD MEMORY
   useEffect(() => {
-    const saved = localStorage.getItem("chat");
-    if (saved) setMessages(JSON.parse(saved));
+    const savedChat = localStorage.getItem("chat");
+    const savedName = localStorage.getItem("name");
+
+    if (savedChat) setMessages(JSON.parse(savedChat));
+    if (savedName) setUserName(savedName);
   }, []);
 
   // 💾 SAVE MEMORY
@@ -18,6 +21,13 @@ export default function App() {
 
   const sendMessage = async () => {
     if (!input.trim()) return;
+
+    // 🧠 detect name
+    if (input.toLowerCase().includes("my name is")) {
+      const name = input.split("is")[1]?.trim();
+      setUserName(name);
+      localStorage.setItem("name", name);
+    }
 
     const newMessages = [
       ...messages,
@@ -32,43 +42,33 @@ export default function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages: newMessages,
-        language: lang
+        userProfile: {
+          name: userName
+        }
       })
     });
 
     const data = await res.json();
 
-    if (data.type === "search") {
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: data.reply + " " + data.url }
-      ]);
-    } else {
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: data.reply }
-      ]);
-    }
+    setMessages([
+      ...newMessages,
+      { role: "assistant", content: data.reply }
+    ]);
   };
 
   return (
     <div style={styles.container}>
       
-      {/* HEADER */}
-      <div style={styles.header}>🤖 Aashu AI PRO</div>
+      <div style={styles.header}>
+        🤖 Aashu AI (Personality Engine)
+      </div>
 
-      {/* LANGUAGE SELECT */}
-      <select
-        value={lang}
-        onChange={(e) => setLang(e.target.value)}
-        style={styles.lang}
-      >
-        <option value="hi">Hindi</option>
-        <option value="en">English</option>
-        <option value="ur">Urdu</option>
-      </select>
+      {userName && (
+        <div style={styles.welcome}>
+          👋 Welcome back, {userName}
+        </div>
+      )}
 
-      {/* CHAT */}
       <div style={styles.chat}>
         {messages.map((m, i) => (
           <div
@@ -84,14 +84,12 @@ export default function App() {
         ))}
       </div>
 
-      {/* INPUT */}
       <div style={styles.inputBox}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything..."
+          placeholder="Type message..."
         />
-
         <button onClick={sendMessage}>➤</button>
       </div>
     </div>
@@ -101,8 +99,8 @@ export default function App() {
 const styles = {
   container: { height: "100vh", display: "flex", flexDirection: "column" },
   header: { padding: 15, fontWeight: "bold", fontSize: 18 },
-  lang: { margin: 10, padding: 5 },
+  welcome: { padding: 10, color: "green" },
   chat: { flex: 1, overflowY: "auto", padding: 10 },
   msg: { padding: 10, borderRadius: 10, maxWidth: "70%", marginBottom: 10 },
-  inputBox: { display: "flex", padding: 10 },
+  inputBox: { display: "flex", padding: 10 }
 };
