@@ -1,19 +1,13 @@
 # 🤖 Aashu Bot
 
-A simple AI Chat & Coding Assistant built with **React + Vite**
+Full AI Chatbot using React + Node + Groq API
 
----
+## Features
+- Real AI replies
+- Chat UI
+- Backend API
+- Vercel + Render ready
 
-## 🚀 Features
-- Chat UI system
-- User + AI message interface
-- Fast Vite React setup
-- Ready for Vercel deployment
-
----
-
-## 📦 Installation (Local Run)
-
-```bash
+## Run
 npm install
 npm run dev
