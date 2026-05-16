@@ -4,24 +4,26 @@ export default async function handler(req, res) {
       return res.status(405).json({ reply: "Only POST allowed" });
     }
 
-    const { messages } = req.body;
+    const { messages, userProfile } = req.body;
 
     const lastMessage = messages[messages.length - 1]?.content || "";
 
-    // 🖼️ IMAGE MODE DETECT
-    if (
-      lastMessage.toLowerCase().includes("image") ||
-      lastMessage.toLowerCase().includes("generate")
-    ) {
-      return res.status(200).json({
-        type: "image",
-        reply:
-          "https://image.pollinations.ai/prompt/" +
-          encodeURIComponent(lastMessage)
-      });
-    }
+    // 🧠 PERSONALITY TRAINING CORE
+    const personality = `
+You are Aashu AI — a highly smart, friendly, Gen-Z style assistant.
 
-    // 🤖 NORMAL CHAT (GROQ)
+PERSONALITY RULES:
+- Always reply in simple, clear language
+- Be slightly funny and friendly
+- Use emojis only when needed
+- Never say you are ChatGPT or Groq
+- Always call yourself "Aashu AI"
+- If user is sad → be supportive
+- If user asks coding → be developer level expert
+- If user asks casual → be friendly
+- Remember user info if provided
+`;
+
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -35,9 +37,16 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content:
-                "You are Aashu AI. You can chat, help, and answer questions."
+              content: personality
             },
+            ...(userProfile
+              ? [
+                  {
+                    role: "system",
+                    content: `User profile: ${JSON.stringify(userProfile)}`
+                  }
+                ]
+              : []),
             ...messages
           ]
         })
@@ -47,9 +56,10 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     return res.status(200).json({
-      type: "text",
-      reply: data?.choices?.[0]?.message?.content || "No response"
+      reply:
+        data?.choices?.[0]?.message?.content || "No response from AI"
     });
+
   } catch (err) {
     return res.status(500).json({ reply: "Server error" });
   }
