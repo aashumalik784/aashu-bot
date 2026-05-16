@@ -6,22 +6,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const GROQ_API_KEY = "YOUR_GROQ_API_KEY";
+const API_KEY = "YOUR_GROQ_API_KEY";
 
 app.post("/chat", async (req, res) => {
-  const userMessage = req.body.message;
+  const message = req.body.message;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`
+      "Authorization": `Bearer ${API_KEY}`
     },
     body: JSON.stringify({
       model: "llama3-8b-8192",
       messages: [
-        { role: "system", content: "You are a helpful AI assistant." },
-        { role: "user", content: userMessage }
+        { role: "system", content: "You are Aashu Bot AI assistant." },
+        { role: "user", content: message }
       ]
     })
   });
