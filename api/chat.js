@@ -9,30 +9,35 @@ export default async function handler(req, res) {
     const { messages, userProfile } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ reply: "Messages format is missing or invalid." });
+      return res.status(400).json({ reply: "Messages format is invalid." });
     }
 
-    // 🕒 Live Date Setup (IST)
+    // 🕒 Live Date & Time Calculation (IST Format)
     const options = { timeZone: "Asia/Kolkata", year: "numeric", month: "long", day: "numeric", weekday: "long" };
     const currentDate = new Date().toLocaleDateString("en-US", options);
     const currentTime = new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
 
     const personality = `
-You are Aashu AI, an authentic, adaptive AI collaborator with a touch of wit.
+You are Aashu AI, the ultimate All-in-One Super AI assistant designed by Aashu Malik. 
+You possess the reasoning of Claude, the coding intelligence of GPT-4, and the visual understanding of top-tier vision models.
+
 Current Live Context in India:
 - Date: ${currentDate}
 - Time: ${currentTime}
 - Year: ${new Date().toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", year: "numeric" })}
 
-Rules: Respond casually, use beautiful markdown bullet points for lists, and speak naturally in Hinglish/Hindi or English. If an image or code screenshot is attached, inspect the data layout thoroughly to solve any engineering problem.
+Your Capabilities:
+1. **Advanced Coding & Architecture**: Provide instantly ready, production-grade code snippets for Web, App (Flutter/Kodular), and Automation scripts without bugs.
+2. **Vision Engine**: Deeply analyze attached screenshots, trace frontend/backend bugs, read diagrams, and interpret handwritten notes.
+3. **Witty & Peer-like Persona**: Speak casually in friendly Hinglish/Hindi or English. Never sound robotic or say your knowledge is limited to 2023. You are fully live.
 `;
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(200).json({ reply: "⚠️ Backend Config Error: Vercel par 'GROQ_API_KEY' missing hai." });
+      return res.status(200).json({ reply: "⚠️ Config Error: Vercel Environment Variables mein 'GROQ_API_KEY' missing hai." });
     }
 
-    // Map content formats into OpenAI/Groq Vision payload structure safely
+    // Dynamic Payload Mapping for Vision/Text Analytics
     const groqMessages = [
       { role: "system", content: personality },
       ...(userProfile ? [{ role: "system", content: `User Profile: ${JSON.stringify(userProfile)}` }] : [])
@@ -40,23 +45,23 @@ Rules: Respond casually, use beautiful markdown bullet points for lists, and spe
 
     messages.forEach((msg) => {
       if (msg.role === "user") {
-        const contentArray = [{ type: "text", text: msg.content || "Analyze this request" }];
-        
-        // Agar frontend se structure mein base64 image data string aaya hai
         if (msg.image) {
-          contentArray.push({
-            type: "image_url",
-            image_url: { url: msg.image }
+          groqMessages.push({
+            role: "user",
+            content: [
+              { type: "text", text: msg.content || "Analyze this attached image file thoroughly." },
+              { type: "image_url", image_url: { url: msg.image } }
+            ]
           });
+        } else {
+          groqMessages.push({ role: "user", content: String(msg.content || "") });
         }
-        
-        groqMessages.push({ role: "user", content: contentArray });
       } else {
-        // FIXED THE BUG HERE: Changed m.role to msg.role safely
-        groqMessages.push({ role: msg.role, content: msg.content });
+        groqMessages.push({ role: "assistant", content: String(msg.content || "") });
       }
     });
 
+    // Using Llama 3.2 Vision Preview for handling multi-modal super reasoning instantly
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -64,26 +69,26 @@ Rules: Respond casually, use beautiful markdown bullet points for lists, and spe
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile", 
+        model: "llama-3.2-11b-vision-preview",
         messages: groqMessages,
-        temperature: 0.7
+        temperature: 0.6
       })
     });
 
     const data = await response.json();
 
     if (data?.error) {
-      return res.status(200).json({ reply: `Groq Alert: ${data.error.message}` });
+      return res.status(200).json({ reply: `Groq Interface Note: ${data.error.message}` });
     }
 
     if (data?.choices?.[0]?.message?.content) {
       return res.status(200).json({ reply: data.choices[0].message.content });
     }
 
-    return res.status(200).json({ reply: "Aashu AI backend received an empty payload response." });
+    return res.status(200).json({ reply: "Aashu AI backend received an empty payload response state." });
 
   } catch (err) {
-    console.error("Crash Caught:", err);
+    console.error("Global Engine Error:", err);
     return res.status(200).json({ reply: `⚠️ Edge Function Note: ${err.message}` });
   }
 }
