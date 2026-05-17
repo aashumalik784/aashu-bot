@@ -20,10 +20,9 @@ You are Aashu AI Super Engine, a premier intelligent assistant created by Aashu 
 Current Context: Date: ${currentDate} | Time: ${currentTime} | Location: India.
 
 CRITICAL FORMATTING RULES:
-1. Whenever you provide a website link or URL, ALWAYS wrap it in standard markdown hyperlink format: [Click here to open](https://example.com) or directly [https://example.com](https://example.com). NEVER send raw text links inside double asterisks like **https://...**.
+1. Whenever you provide a website link or URL, ALWAYS wrap it in markdown hyperlink format: [Click here to open](https://example.com) or [https://example.com](https://example.com). NEVER send raw text links inside double asterisks.
 2. Respond naturally in clean Hinglish/Hindi or English. Use markdown bullet points for lists.
-3. Keep the output clean. DO NOT attach any server logs, engine debug notes, or extra technical footers at the end of your response.
-4. If a screenshot is uploaded, parse the text inside it thoroughly and answer seamlessly.
+3. ABSOLUTELY CLEAN OUTPUT REQUIRED: Do NOT append any server metadata, logs, engine brand names, debug texts, or bracketed footers like "Engine: Groq" or "Powered by" at the end of your text. Stop immediately after answering the user query.
 `;
 
     const lastMessage = messages[messages.length - 1] || { content: "" };
@@ -38,14 +37,14 @@ CRITICAL FORMATTING RULES:
       }
     }
 
-    // 🚀 ROUTE 1: GOOGLE GEMINI CORE
+    // 🚀 MASTER CORE: GEMINI
     if (process.env.GEMINI_API_KEY) {
       try {
         const parts = [];
         if (hasImage) {
           parts.push({ inlineData: { data: base64Raw, mimeType: mimeType } });
         }
-        parts.push({ text: (lastMessage.content || "Analyze this request") + `\n\n[System Core Framework Context: ${systemPrompt}]` });
+        parts.push({ text: (lastMessage.content || "Analyze this setup") + `\n\n[Core Directive Framework: ${systemPrompt}]` });
 
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: "POST",
@@ -57,16 +56,21 @@ CRITICAL FORMATTING RULES:
         });
 
         const geminiData = await geminiRes.json();
-        const reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) return res.status(200).json({ reply });
+        let reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (reply) {
+          // Extra cleanup filter regex to make sure no loose engine tags pass through
+          reply = reply.replace(/\*?\(?\s*🔥?\s*Engine:\s*[^)]+\s*\)?\*?/gi, "").trim();
+          return res.status(200).json({ reply });
+        }
       } catch (e) {}
     }
 
-    // 🚀 ROUTE 2: OPENROUTER FALLBACK
+    // 🚀 BACKUP CORE: OPENROUTER
     if (process.env.OPENROUTER_API_KEY) {
       try {
         let contentPayload = hasImage ? [
-          { type: "text", text: lastMessage.content || "Analyze this attached image content" },
+          { type: "text", text: lastMessage.content || "Analyze image details" },
           { type: "image_url", image_url: { url: lastMessage.image } }
         ] : lastMessage.content;
 
@@ -79,16 +83,19 @@ CRITICAL FORMATTING RULES:
           })
         });
         const orData = await openRouterRes.json();
-        const reply = orData?.choices?.[0]?.message?.content;
-        if (reply) return res.status(200).json({ reply });
+        let reply = orData?.choices?.[0]?.message?.content;
+        if (reply) {
+          reply = reply.replace(/\*?\(?\s*🔥?\s*Engine:\s*[^)]+\s*\)?\*?/gi, "").trim();
+          return res.status(200).json({ reply });
+        }
       } catch (e) {}
     }
 
-    // 🚀 ROUTE 3: GROQ VISION FALLBACK
+    // 🚀 BACKUP CORE: GROQ
     if (process.env.GROQ_API_KEY) {
       try {
         let contentPayload = hasImage ? [
-          { type: "text", text: lastMessage.content || "Analyze layout details" },
+          { type: "text", text: lastMessage.content || "Analyze visual data" },
           { type: "image_url", image_url: { url: lastMessage.image } }
         ] : lastMessage.content;
 
@@ -102,15 +109,18 @@ CRITICAL FORMATTING RULES:
           })
         });
         const groqData = await groqRes.json();
-        const reply = groqData?.choices?.[0]?.message?.content;
-        if (reply) return res.status(200).json({ reply });
+        let reply = groqData?.choices?.[0]?.message?.content;
+        if (reply) {
+          reply = reply.replace(/\*?\(?\s*🔥?\s*Engine:\s*[^)]+\s*\)?\*?/gi, "").trim();
+          return res.status(200).json({ reply });
+        }
       } catch (e) {}
     }
 
-    return res.status(200).json({ reply: "⚠️ Network pipeline timeout. Please try sending your request again." });
+    return res.status(200).json({ reply: "System is re-syncing core nodes. Please try sending your request again." });
 
   } catch (err) {
-    return res.status(200).json({ reply: `⚠️ Error: ${err.message}` });
+    return res.status(200).json({ reply: `⚠️ Connection status: ${err.message}` });
   }
-                                 }
-        
+              }
+                                 
