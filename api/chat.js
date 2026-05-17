@@ -7,18 +7,17 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const chatEndRef = useRef(null);
 
-  // 💾 Memory Load Karein
+  // 💾 LOCAL STORAGE SE MEMORY LOAD KARNA
   useEffect(() => {
     const savedChat = localStorage.getItem("chat");
     const savedName = localStorage.getItem("name");
     if (savedChat) setMessages(JSON.parse(savedChat));
     if (savedName) setUserName(savedName);
     
-    // Mobile screen par sidebar automatic close rakhein
     if (window.innerWidth < 768) setIsSidebarOpen(false);
   }, []);
 
-  // 💾 Auto-Scroll & Save
+  // 💾 AUTO-SCROLL AND STORAGE UPDATE
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem("chat", JSON.stringify(messages));
@@ -26,6 +25,7 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // ✉️ SEND MESSAGE LOGIC (REPAIRED)
   const sendMessage = async () => {
     if (!input.trim()) return;
 
@@ -39,24 +39,42 @@ export default function App() {
       }
     }
 
-    const newMessages = [...messages, { role: "user", content: input }];
-    setMessages(newMessages);
+    // Naya message object taiyar karein
+    const userMessage = { role: "user", content: input };
+    const updatedMessages = [...messages, userMessage];
+
+    // UI ko turant update karein
+    setMessages(updatedMessages);
     setInput("");
 
     try {
+      // Backend request hit karein aur updated array hi bhein
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
-          messages: newMessages,
+          messages: updatedMessages,
           userProfile: { name: currentName }
         })
       });
 
+      if (!res.ok) {
+        throw new Error(`HTTP Error Status: ${res.status}`);
+      }
+
       const data = await res.json();
-      setMessages([...newMessages, { role: "assistant", content: data.reply }]);
+      
+      // Response ko system array mein merge karein
+      setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
+      
     } catch (error) {
-      setMessages([...newMessages, { role: "assistant", content: "⚠️ Connection error. Please check backend." }]);
+      console.error("Fetch Connection Error:", error);
+      setMessages([
+        ...updatedMessages, 
+        { role: "assistant", content: `⚠️ Connection Error: Backend server response nahi de raha. (Details: ${error.message})` }
+      ]);
     }
   };
 
@@ -70,7 +88,7 @@ export default function App() {
   return (
     <div style={styles.appContainer}>
       
-      {/* 1. SIDEBAR (CHATS & OPTIONS) */}
+      {/* SIDEBAR */}
       <div style={{...styles.sidebar, width: isSidebarOpen ? "260px" : "0px", opacity: isSidebarOpen ? 1 : 0}}>
         <div style={styles.sidebarHeader}>
           <button onClick={clearChat} style={styles.newChatBtn}>＋ New Chat</button>
@@ -86,17 +104,17 @@ export default function App() {
         </div>
       </div>
 
-      {/* 2. MAIN CHAT AREA */}
+      {/* MAIN CONTENT CONTAINER */}
       <div style={styles.mainContent}>
         
-        {/* TOP NAVBAR */}
+        {/* NAVBAR */}
         <div style={styles.navbar}>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={styles.menuBtn}>☰</button>
           <div style={styles.navBrand}>Aashu AI</div>
           <div style={styles.avatar}>AM</div>
         </div>
 
-        {/* MESSAGES OR WELCOME SCREEN */}
+        {/* CHAT LOGS OR GEMINI STYLE WELCOME SCREEN */}
         <div style={styles.chatWindow}>
           {messages.length === 0 ? (
             <div style={styles.welcomeContainer}>
@@ -126,7 +144,7 @@ export default function App() {
           )}
         </div>
 
-        {/* FLOATING INPUT CONTROLS */}
+        {/* FLOATING TEXT INPUT ENGINE */}
         <div style={styles.inputContainer}>
           <div style={styles.inputWrapper}>
             <input
@@ -148,7 +166,7 @@ export default function App() {
   );
 }
 
-// PREMIUM MINIMALIST AI SYSTEM STYLES
+// STYLES STAYS SAME FOR ABSOLUTE PREMIUM LOOK
 const styles = {
   appContainer: { display: "flex", height: "100vh", background: "#131314", color: "#e3e3e3", fontFamily: "'Segoe UI', system-ui, sans-serif", overflow: "hidden" },
   sidebar: { background: "#1e1f20", display: "flex", flexDirection: "column", transition: "all 0.3s ease", overflow: "hidden", borderRight: "1px solid #28292a" },
@@ -164,7 +182,7 @@ const styles = {
   navBrand: { fontSize: "18px", fontWeight: "500", color: "#c4c7c5" },
   avatar: { width: "32px", height: "32px", borderRadius: "50%", background: "#004a77", color: "#c2e7ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "600" },
   chatWindow: { flex: 1, overflowY: "auto", padding: "10px 0" },
-  welcomeContainer: { maxWidth: "700px", margin: "80px auto padding", padding: "0 20px" },
+  welcomeContainer: { maxWidth: "700px", margin: "80px auto 0", padding: "0 20px" },
   welcomeText: { fontSize: "40px", fontWeight: "500", background: "linear-gradient(45deg, #4285f4, #9b51e0, #e91e63)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: "0 0 10px 0" },
   subWelcomeText: { fontSize: "22px", color: "#444746", margin: "0 0 40px 0", fontWeight: "500" },
   suggestionGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "15px" },
