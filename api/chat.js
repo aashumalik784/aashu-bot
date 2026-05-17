@@ -67,7 +67,8 @@ CRITICAL: If the user uploads an image, screenshot, or chart, look at it careful
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "llama-3.2-11b-vision-preview", // 🔥 FIXED: Sahi aur stable live vision model name lagaya hai
+        model: "llama-3.3-70b-versatile",
+        ", // 🔥 FIXED: Sahi aur stable live vision model name lagaya hai
         messages: groqMessages,
         temperature: 0.6
       })
