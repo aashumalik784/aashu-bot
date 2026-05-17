@@ -25,7 +25,6 @@ Current Live Context in India:
 - Year: ${new Date().toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", year: "numeric" })}
 
 Rules: Respond casually, use beautiful markdown bullet points for lists, and speak naturally in Hinglish/Hindi or English. 
-CRITICAL: If the user uploads an image, screenshot, or chart, look at it carefully and explain/answer exactly what the user is asking about that visual image.
 `;
 
     const apiKey = process.env.GROQ_API_KEY;
@@ -33,7 +32,7 @@ CRITICAL: If the user uploads an image, screenshot, or chart, look at it careful
       return res.status(200).json({ reply: "⚠️ Backend Config Error: Vercel par 'GROQ_API_KEY' missing hai." });
     }
 
-    // Initialize structured message chain for Groq Vision
+    // Initialize structured message chain for Groq Text-only Model
     const groqMessages = [
       { role: "system", content: personality },
       ...(userProfile ? [{ role: "system", content: `User Profile: ${JSON.stringify(userProfile)}` }] : [])
@@ -41,20 +40,7 @@ CRITICAL: If the user uploads an image, screenshot, or chart, look at it careful
 
     messages.forEach((msg) => {
       if (msg.role === "user") {
-        if (msg.image) {
-          groqMessages.push({
-            role: "user",
-            content: [
-              { type: "text", text: msg.content || "Analyze this attached image content" },
-              {
-                type: "image_url",
-                image_url: { url: msg.image }
-              }
-            ]
-          });
-        } else {
-          groqMessages.push({ role: "user", content: String(msg.content || "") });
-        }
+        groqMessages.push({ role: "user", content: String(msg.content || "") });
       } else {
         groqMessages.push({ role: "assistant", content: String(msg.content || "") });
       }
@@ -67,8 +53,7 @@ CRITICAL: If the user uploads an image, screenshot, or chart, look at it careful
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        ", // 🔥 FIXED: Sahi aur stable live vision model name lagaya hai
+        model: "llama-3.3-70b-versatile", // 🔥 Hamesha chalne wala best core model set kar diya hai
         messages: groqMessages,
         temperature: 0.6
       })
