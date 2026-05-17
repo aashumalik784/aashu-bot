@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // Clear and strict JSON API response headers
   res.setHeader('Content-Type', 'application/json');
 
   try {
@@ -8,77 +7,41 @@ export default async function handler(req, res) {
     }
 
     const { messages } = req.body;
-    
-    // Core fallback layer if message payload array is structurally empty
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(200).json({ reply: "Hello Aashu! Main live hoon, aap apna sawaal pooch sakte hain. 😎" });
+      return res.status(200).json({ reply: "Aashu AI Node Active! Sawaal poochiye bhai. 😎" });
     }
 
-    const options = { timeZone: "Asia/Kolkata", year: "numeric", month: "long", day: "numeric", weekday: "long" };
-    const currentDate = new Date().toLocaleDateString("en-US", options);
-    const currentTime = new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
-
-    // Multi-Core System Directives
-    const systemPrompt = `
-You are Aashu AI Super Engine, a premier intelligent assistant created by Aashu Malik.
-Current Context: Date: ${currentDate} | Time: ${currentTime} | Location: India.
-
-CRITICAL FORMATTING RULES:
-1. Whenever you provide a website link or URL, ALWAYS wrap it in markdown hyperlink format: [Click here to open](https://example.com). NEVER send raw text links inside double asterisks.
-2. Respond naturally in clean Hinglish/Hindi or English. Use markdown bullet points for lists.
-3. ABSOLUTELY CLEAN OUTPUT REQUIRED: Do NOT append any server metadata, logs, engine brand names, or footers at the end of your text. Stop immediately after answering the user query.
-`;
-
-    // Safely extract the last user message block to prevent multi-array crashes
+    const systemPrompt = "You are Aashu AI Super Engine, created by Aashu Malik. Respond naturally in clean Hinglish or English.";
     const lastMessage = messages[messages.length - 1] || { content: "" };
     const userQuery = lastMessage.content || "Hello";
-    const hasImage = !!lastMessage.image;
-    
-    let base64Raw = "";
-    let mimeType = "image/jpeg";
-    if (hasImage) {
-      base64Raw = lastMessage.image.includes(",") ? lastMessage.image.split(",")[1] : lastMessage.image;
-      if (lastMessage.image.includes("data:")) {
-        mimeType = lastMessage.image.split(",")[0].split(":")[1].split(";")[0];
-      }
-    }
 
     // ==========================================
-    // 🚀 ENGINE 1: GOOGLE GEMINI CORE (`GEMINI_API_KEY`)
+    // 🚀 ENGINE 1: GOOGLE GEMINI CORE
     // ==========================================
     if (process.env.GEMINI_API_KEY) {
       try {
-        const parts = [];
-        if (hasImage) {
-          parts.push({ inlineData: { data: base64Raw, mimeType: mimeType } });
-        }
-        parts.push({ text: userQuery + `\n\n[System Core Directive: ${systemPrompt}]` });
-
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: parts }],
-            generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
+            contents: [{ role: "user", parts: [{ text: userQuery + `\n\n[Context: ${systemPrompt}]` }] }]
           })
         });
 
         const geminiData = await geminiRes.json();
-        let reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) return res.status(200).json({ reply: reply.trim() });
-      } catch (e) { console.log("Gemini bypass..."); }
+        // AGAR KEY INVALID HAI TOH ERROR RETURN NAHI KARENGE, AGLE ENGINE PAR JAYENGE
+        if (!geminiData?.error) {
+          const reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (reply) return res.status(200).json({ reply: reply.trim() });
+        }
+      } catch (e) {}
     }
 
     // ==========================================
-    // 🚀 ENGINE 2: GROQ VISION FALLBACK (`GROQ_API_KEY`)
+    // 🚀 ENGINE 2: GROQ FALLBACK
     // ==========================================
     if (process.env.GROQ_API_KEY) {
       try {
-        let contentPayload = hasImage ? [
-          { type: "text", text: userQuery },
-          { type: "image_url", image_url: { url: lastMessage.image } }
-        ] : userQuery;
-
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: { 
@@ -89,27 +52,23 @@ CRITICAL FORMATTING RULES:
             model: "llama-3.2-11b-vision-preview",
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: contentPayload }
-            ],
-            temperature: 0.4
+              { role: "user", content: userQuery }
+            ]
           })
         });
         const groqData = await groqRes.json();
-        let reply = groqData?.choices?.[0]?.message?.content;
-        if (reply) return res.status(200).json({ reply: reply.trim() });
-      } catch (e) { console.log("Groq bypass..."); }
+        if (!groqData?.error) {
+          const reply = groqData?.choices?.[0]?.message?.content;
+          if (reply) return res.status(200).json({ reply: reply.trim() });
+        }
+      } catch (e) {}
     }
 
     // ==========================================
-    // 🚀 ENGINE 3: OPENROUTER FALLBACK (`OPENROUTER_API_KEY`)
+    // 🚀 ENGINE 3: OPENROUTER FALLBACK
     // ==========================================
     if (process.env.OPENROUTER_API_KEY) {
       try {
-        let contentPayload = hasImage ? [
-          { type: "text", text: userQuery },
-          { type: "image_url", image_url: { url: lastMessage.image } }
-        ] : userQuery;
-
         const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: { 
@@ -120,18 +79,20 @@ CRITICAL FORMATTING RULES:
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: contentPayload }
+              { role: "user", content: userQuery }
             ]
           })
         });
         const orData = await openRouterRes.json();
-        let reply = orData?.choices?.[0]?.message?.content;
-        if (reply) return res.status(200).json({ reply: reply.trim() });
-      } catch (e) { console.log("OpenRouter bypass..."); }
+        if (!orData?.error) {
+          const reply = orData?.choices?.[0]?.message?.content;
+          if (reply) return res.status(200).json({ reply: reply.trim() });
+        }
+      } catch (e) {}
     }
 
     // ==========================================
-    // 🚀 ENGINE 4: COHERE COMMAND LIGHT FALLBACK (`COHERE_API_KEY`)
+    // 🚀 ENGINE 4: COHERE FALLBACK
     // ==========================================
     if (process.env.COHERE_API_KEY) {
       try {
@@ -144,18 +105,19 @@ CRITICAL FORMATTING RULES:
           body: JSON.stringify({
             model: "command-r-plus",
             message: userQuery,
-            preamble: systemPrompt,
-            temperature: 0.4
+            preamble: systemPrompt
           })
         });
         const cohereData = await cohereRes.json();
-        let reply = cohereData?.text;
-        if (reply) return res.status(200).json({ reply: reply.trim() });
-      } catch (e) { console.log("Cohere bypass..."); }
+        if (!cohereData?.error) {
+          const reply = cohereData?.text;
+          if (reply) return res.status(200).json({ reply: reply.trim() });
+        }
+      } catch (e) {}
     }
 
     // ==========================================
-    // 🚀 ENGINE 5: HUGGING FACE INFERENCE FALLBACK (`HF_TOKEN`)
+    // 🚀 ENGINE 5: HUGGING FACE FALLBACK
     // ==========================================
     if (process.env.HF_TOKEN) {
       try {
@@ -167,26 +129,22 @@ CRITICAL FORMATTING RULES:
           },
           body: JSON.stringify({
             inputs: `<|system|>\n${systemPrompt}\n<|user|>\n${userQuery}\n<|assistant|>\n`,
-            parameters: { max_new_tokens: 1024, temperature: 0.5 }
+            parameters: { max_new_tokens: 512, temperature: 0.5 }
           })
         });
         const hfData = await hfRes.json();
         let reply = hfData?.[0]?.generated_text;
         if (reply) {
-          // Clean Llama output format wrapper
-          if (reply.includes("<|assistant|>\n")) {
-            reply = reply.split("<|assistant|>\n")[1];
-          }
+          if (reply.includes("<|assistant|>\n")) reply = reply.split("<|assistant|>\n")[1];
           return res.status(200).json({ reply: reply.trim() });
         }
-      } catch (e) { console.log("HuggingFace bypass..."); }
+      } catch (e) {}
     }
 
-    // Ultimate high-availability fallback if all pipelines take time to respond
-    return res.status(200).json({ reply: "Aashu AI Multi-Core Core Engine live hain. Aap apna sawaal pooch sakte hain! 🚀" });
+    return res.status(200).json({ reply: "Aashu AI Multi-Core Smart Standby Mode. Kripya apni API keys ki validity check karein!" });
 
   } catch (err) {
-    return res.status(200).json({ reply: `⚠️ Server Sync Exception: ${err.message}` });
+    return res.status(200).json({ reply: `⚠️ Connection Exception: ${err.message}` });
   }
-      }
-                
+          }
+          
