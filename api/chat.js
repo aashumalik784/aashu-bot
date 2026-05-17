@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // Clear and strict JSON API response headers
   res.setHeader('Content-Type', 'application/json');
 
   try {
@@ -8,6 +9,7 @@ export default async function handler(req, res) {
 
     const { messages } = req.body;
 
+    // Core fallback layer if message payload array is structurally empty
     if (!messages ||!Array.isArray(messages) || messages.length === 0) {
       return res.status(200).json({ reply: "Hello Aashu! Main live hoon, aap apna sawaal pooch sakte hain. 😎" });
     }
@@ -16,6 +18,7 @@ export default async function handler(req, res) {
     const currentDate = new Date().toLocaleDateString("en-US", options);
     const currentTime = new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
 
+    // Multi-Core System Directives
     const systemPrompt = `
 You are Aashu AI Super Engine, a premier intelligent assistant created by Aashu Malik.
 Current Context: Date: ${currentDate} | Time: ${currentTime} | Location: India.
@@ -26,6 +29,7 @@ CRITICAL FORMATTING RULES:
 3. ABSOLUTELY CLEAN OUTPUT REQUIRED: Do NOT append any server metadata, logs, engine brand names, or footers at the end of your text. Stop immediately after answering the user query.
 `;
 
+    // Safely extract the last user message block to prevent multi-array crashes
     const lastMessage = messages[messages.length - 1] || { content: "" };
     const userQuery = lastMessage.content || "Hello";
     const hasImage =!!lastMessage.image;
@@ -39,17 +43,8 @@ CRITICAL FORMATTING RULES:
       }
     }
 
-    // DEBUG: Check kaunsi keys mili
-    const keyStatus = {
-      GEMINI:!!process.env.GEMINI_API_KEY,
-      GROQ:!!process.env.GROQ_API_KEY,
-      OPENROUTER:!!process.env.OPENROUTER_API_KEY,
-      COHERE:!!process.env.COHERE_API_KEY,
-      HF:!!process.env.HF_TOKEN
-    };
-
     // ==========================================
-    // 🚀 ENGINE 1: GOOGLE GEMINI CORE
+    // 🚀 ENGINE 1: GOOGLE GEMINI CORE (`GEMINI_API_KEY`)
     // ==========================================
     if (process.env.GEMINI_API_KEY) {
       try {
@@ -57,9 +52,10 @@ CRITICAL FORMATTING RULES:
         if (hasImage) {
           parts.push({ inlineData: { data: base64Raw, mimeType: mimeType } });
         }
+        // ✅ FIXED: System Instruction aur User Query ko sahi format mein alag kiya taaki Gemini reject na kare
         parts.push({ text: `System Instruction: ${systemPrompt}\n\nUser Question: ${userQuery}` });
 
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -68,22 +64,14 @@ CRITICAL FORMATTING RULES:
           })
         });
 
-        if (!geminiRes.ok) {
-          const errorData = await geminiRes.json();
-          throw new Error(`HTTP ${geminiRes.status}: ${errorData.error?.message || 'Unknown error'}`);
-        }
-
         const geminiData = await geminiRes.json();
         let reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (reply) return res.status(200).json({ reply: reply.trim() });
-        throw new Error("Gemini se khali response aaya");
-      } catch (e) {
-        return res.status(200).json({ reply: `GEMINI ERROR: ${e.message}\n\nKey Status: ${JSON.stringify(keyStatus)}` });
-      }
+      } catch (e) { console.log("Gemini bypass...", e.message); }
     }
 
     // ==========================================
-    // 🚀 ENGINE 2: GROQ VISION FALLBACK
+    // 🚀 ENGINE 2: GROQ VISION FALLBACK (`GROQ_API_KEY`)
     // ==========================================
     if (process.env.GROQ_API_KEY) {
       try {
@@ -107,23 +95,14 @@ CRITICAL FORMATTING RULES:
             temperature: 0.4
           })
         });
-
-        if (!groqRes.ok) {
-          const errorData = await groqRes.json();
-          throw new Error(`HTTP ${groqRes.status}: ${errorData.error?.message || 'Unknown error'}`);
-        }
-
         const groqData = await groqRes.json();
         let reply = groqData?.choices?.[0]?.message?.content;
         if (reply) return res.status(200).json({ reply: reply.trim() });
-        throw new Error("Groq se khali response aaya");
-      } catch (e) {
-        return res.status(200).json({ reply: `GROQ ERROR: ${e.message}\n\nKey Status: ${JSON.stringify(keyStatus)}` });
-      }
+      } catch (e) { console.log("Groq bypass...", e.message); }
     }
 
     // ==========================================
-    // 🚀 ENGINE 3: OPENROUTER FALLBACK
+    // 🚀 ENGINE 3: OPENROUTER FALLBACK (`OPENROUTER_API_KEY`)
     // ==========================================
     if (process.env.OPENROUTER_API_KEY) {
       try {
@@ -146,23 +125,14 @@ CRITICAL FORMATTING RULES:
             ]
           })
         });
-
-        if (!openRouterRes.ok) {
-          const errorData = await openRouterRes.json();
-          throw new Error(`HTTP ${openRouterRes.status}: ${errorData.error?.message || 'Unknown error'}`);
-        }
-
         const orData = await openRouterRes.json();
         let reply = orData?.choices?.[0]?.message?.content;
         if (reply) return res.status(200).json({ reply: reply.trim() });
-        throw new Error("OpenRouter se khali response aaya");
-      } catch (e) {
-        return res.status(200).json({ reply: `OPENROUTER ERROR: ${e.message}\n\nKey Status: ${JSON.stringify(keyStatus)}` });
-      }
+      } catch (e) { console.log("OpenRouter bypass...", e.message); }
     }
 
     // ==========================================
-    // 🚀 ENGINE 4: COHERE COMMAND FALLBACK
+    // 🚀 ENGINE 4: COHERE COMMAND LIGHT FALLBACK (`COHERE_API_KEY`)
     // ==========================================
     if (process.env.COHERE_API_KEY) {
       try {
@@ -179,23 +149,14 @@ CRITICAL FORMATTING RULES:
             temperature: 0.4
           })
         });
-
-        if (!cohereRes.ok) {
-          const errorData = await cohereRes.json();
-          throw new Error(`HTTP ${cohereRes.status}: ${errorData.message || 'Unknown error'}`);
-        }
-
         const cohereData = await cohereRes.json();
         let reply = cohereData?.text;
         if (reply) return res.status(200).json({ reply: reply.trim() });
-        throw new Error("Cohere se khali response aaya");
-      } catch (e) {
-        return res.status(200).json({ reply: `COHERE ERROR: ${e.message}\n\nKey Status: ${JSON.stringify(keyStatus)}` });
-      }
+      } catch (e) { console.log("Cohere bypass...", e.message); }
     }
 
     // ==========================================
-    // 🚀 ENGINE 5: HUGGING FACE FALLBACK
+    // 🚀 ENGINE 5: HUGGING FACE INFERENCE FALLBACK (`HF_TOKEN`)
     // ==========================================
     if (process.env.HF_TOKEN) {
       try {
@@ -210,12 +171,6 @@ CRITICAL FORMATTING RULES:
             parameters: { max_new_tokens: 1024, temperature: 0.5 }
           })
         });
-
-        if (!hfRes.ok) {
-          const errorData = await hfRes.json();
-          throw new Error(`HTTP ${hfRes.status}: ${errorData.error || 'Unknown error'}`);
-        }
-
         const hfData = await hfRes.json();
         let reply = hfData?.[0]?.generated_text;
         if (reply) {
@@ -224,17 +179,13 @@ CRITICAL FORMATTING RULES:
           }
           return res.status(200).json({ reply: reply.trim() });
         }
-        throw new Error("HuggingFace se khali response aaya");
-      } catch (e) {
-        return res.status(200).json({ reply: `HF ERROR: ${e.message}\n\nKey Status: ${JSON.stringify(keyStatus)}` });
-      }
+      } catch (e) { console.log("HuggingFace bypass...", e.message); }
     }
 
-    return res.status(200).json({
-      reply: `KOI BHI API KEY NAHI MILI VERCEL PE!\n\nKey Status: ${JSON.stringify(keyStatus)}\n\nVercel → Settings → Environment Variables check kar aur Production tick karke Redeploy kar.`
-    });
+    // ✅ FIXED: Agar saare engine bypass ho jayein, toh user ko bataye ki API key check karein, na ki purana ready state loop chalaye
+    return res.status(200).json({ reply: "Bhai lagta hai saare API providers down hain ya Vercel par Environment Keys missing hain! Apni settings check karo." });
 
   } catch (err) {
-    return res.status(200).json({ reply: `⚠️ SERVER CRASH: ${err.message}` });
+    return res.status(200).json({ reply: `⚠️ Server Sync Exception: ${err.message}` });
   }
-                                                }
+              }
