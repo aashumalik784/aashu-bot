@@ -1,5 +1,3 @@
-// Live Active Multi-Core Engine v3.0
-
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
@@ -9,25 +7,20 @@ export default async function handler(req, res) {
     }
 
     const { messages } = req.body;
+    
+    // Fallback block agar array khali ho
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(200).json({ reply: "Hello Aashu! Main live hoon, aap apna sawaal pooch sakte hain. 😎" });
+      return res.status(200).json({ reply: "Aashu Malik ke Super Engine node live hain. Aap apna sawaal pooch sakte hain! 😎" });
     }
 
-    const options = { timeZone: "Asia/Kolkata", year: "numeric", month: "long", day: "numeric", weekday: "long" };
-    const currentDate = new Date().toLocaleDateString("en-US", options);
-    const currentTime = new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
-
     const systemPrompt = `
-You are Aashu AI Super Engine, a premier intelligent assistant created by Aashu Malik. 
-Current Context: Date: ${currentDate} | Time: ${currentTime} | Location: India.
-
-CRITICAL FORMATTING RULES:
-1. Whenever you provide a website link or URL, ALWAYS wrap it in markdown hyperlink format: [Click here to open](https://example.com) or [https://example.com](https://example.com). NEVER send raw text links inside double asterisks.
-2. Respond naturally in clean Hinglish/Hindi or English. Use markdown bullet points for lists.
-3. ABSOLUTELY CLEAN OUTPUT REQUIRED: Do NOT append any server metadata, logs, engine brand names, debug texts, or bracketed footers at the end of your text. Stop immediately after answering the user query.
+You are Aashu AI Super Engine, a premier intelligent assistant created by Aashu Malik.
+Respond naturally in clean Hinglish/Hindi or English. Use markdown bullet points for lists.
+If the user asks for a website link, wrap it in markdown format: [Click here to open](https://example.com).
+CRITICAL: Do NOT append any server logs, engine names, or text footers at the end of your response.
 `;
 
-    // Safely pull the last message block
+    // Extract the absolute last message safely to avoid nested array crashes
     const lastMessage = messages[messages.length - 1] || { content: "" };
     const userQuery = lastMessage.content || "Hello";
     const hasImage = !!lastMessage.image;
@@ -42,7 +35,7 @@ CRITICAL FORMATTING RULES:
     }
 
     // ==========================================
-    // 🚀 ENGINE 1: GOOGLE GEMINI CORE (Direct String Setup)
+    // 🚀 ENGINE 1: GEMINI CORE (Direct Extraction)
     // ==========================================
     if (process.env.GEMINI_API_KEY) {
       try {
@@ -50,37 +43,25 @@ CRITICAL FORMATTING RULES:
         if (hasImage) {
           parts.push({ inlineData: { data: base64Raw, mimeType: mimeType } });
         }
-        parts.push({ text: userQuery + `\n\n[System Core Directive: ${systemPrompt}]` });
+        parts.push({ text: userQuery + `\n\n[System Context: ${systemPrompt}]` });
 
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: parts }],
-            generationConfig: { temperature: 0.5, maxOutputTokens: 2048 }
-          })
+          body: JSON.stringify({ contents: [{ role: "user", parts: parts }] })
         });
 
         const geminiData = await geminiRes.json();
-        let reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (reply) {
-          reply = reply.replace(/\*?\(?\s*🔥?\s*Engine:\s*[^)]+\s*\)?\*?/gi, "").trim();
-          return res.status(200).json({ reply });
-        }
+        const reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply) return res.status(200).json({ reply: reply.trim() });
       } catch (e) {}
     }
 
     // ==========================================
-    // 🚀 ENGINE 2: OPENROUTER (Ultra Intelligent Direct Standard Fallback)
+    // 🚀 ENGINE 2: OPENROUTER FALLBACK
     // ==========================================
     if (process.env.OPENROUTER_API_KEY) {
       try {
-        let contentPayload = hasImage ? [
-          { type: "text", text: userQuery },
-          { type: "image_url", image_url: { url: lastMessage.image } }
-        ] : userQuery;
-
         const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: { 
@@ -91,29 +72,21 @@ CRITICAL FORMATTING RULES:
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: contentPayload }
+              { role: "user", content: userQuery }
             ]
           })
         });
         const orData = await openRouterRes.json();
-        let reply = orData?.choices?.[0]?.message?.content;
-        if (reply) {
-          reply = reply.replace(/\*?\(?\s*🔥?\s*Engine:\s*[^)]+\s*\)?\*?/gi, "").trim();
-          return res.status(200).json({ reply });
-        }
+        const reply = orData?.choices?.[0]?.message?.content;
+        if (reply) return res.status(200).json({ reply: reply.trim() });
       } catch (e) {}
     }
 
     // ==========================================
-    // 🚀 ENGINE 3: GROQ VISION FALLBACK
+    // 🚀 ENGINE 3: GROQ FALLBACK
     // ==========================================
     if (process.env.GROQ_API_KEY) {
       try {
-        let contentPayload = hasImage ? [
-          { type: "text", text: userQuery },
-          { type: "image_url", image_url: { url: lastMessage.image } }
-        ] : userQuery;
-
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: { 
@@ -124,24 +97,20 @@ CRITICAL FORMATTING RULES:
             model: "llama-3.2-11b-vision-preview",
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: contentPayload }
-            ],
-            temperature: 0.4
+              { role: "user", content: userQuery }
+            ]
           })
         });
         const groqData = await groqRes.json();
-        let reply = groqData?.choices?.[0]?.message?.content;
-        if (reply) {
-          reply = reply.replace(/\*?\(?\s*🔥?\s*Engine:\s*[^)]+\s*\)?\*?/gi, "").trim();
-          return res.status(200).json({ reply });
-        }
+        const reply = groqData?.choices?.[0]?.message?.content;
+        if (reply) return res.status(200).json({ reply: reply.trim() });
       } catch (e) {}
     }
 
-    // High availability string responses
-    return res.status(200).json({ reply: "Aashu Malik ke Super Engine node live hain. Main bilkul active hoon, aap apna sawaal pooch sakte hain!" });
+    // Default return message if server variables are processing slowly
+    return res.status(200).json({ reply: "Aashu AI Console ready. Main bilkul active hoon, aap apna sawaal pooch sakte hain!" });
 
   } catch (err) {
-    return res.status(200).json({ reply: `⚠️ Server Sync Exception: ${err.message}` });
+    return res.status(200).json({ reply: `⚠️ Server Sync Failure: ${err.message}` });
   }
 }
