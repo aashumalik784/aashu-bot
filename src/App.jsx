@@ -105,7 +105,18 @@ export default function App() {
         <div style={styles.navbar}>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={styles.menuBtn}>☰</button>
           <div style={styles.navBrand}>Aashu AI</div>
-          <div style={styles.avatar}>AM</div>
+          {/* 🖼️ AAPKI ASLI PHOTO APPLIED HERE */}
+          <img 
+            src="/AASHU_MALIK.jpg" 
+            alt="Aashu Malik" 
+            style={styles.avatarImage} 
+            onError={(e) => {
+              // Fallback agar image public folder mein na mile
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+          <div style={{...styles.avatarFallback, display: 'none'}}>AM</div>
         </div>
 
         {/* CHAT WINDOW */}
@@ -173,7 +184,8 @@ const styles = {
   navbar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: "#131314" },
   menuBtn: { background: "none", border: "none", color: "#e3e3e3", fontSize: "20px", cursor: "pointer" },
   navBrand: { fontSize: "18px", fontWeight: "500", color: "#c4c7c5" },
-  avatar: { width: "32px", height: "32px", borderRadius: "50%", background: "#004a77", color: "#c2e7ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "600" },
+  avatarImage: { width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover", border: "2px solid #3c4043" },
+  avatarFallback: { width: "36px", height: "36px", borderRadius: "50%", background: "#004a77", color: "#c2e7ff", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "600" },
   chatWindow: { flex: 1, overflowY: "auto", padding: "10px 0" },
   welcomeContainer: { maxWidth: "700px", margin: "80px auto 0", padding: "0 20px" },
   welcomeText: { fontSize: "40px", fontWeight: "500", background: "linear-gradient(45deg, #4285f4, #9b51e0, #e91e63)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: "0 0 10px 0" },
@@ -194,4 +206,4 @@ const styles = {
   sendBtn: { background: "none", border: "none", color: "#a8c7fa", fontSize: "20px", cursor: "pointer", padding: "0 8px" },
   footerDisclaimer: { fontSize: "12px", color: "#9aa0a6", textAlign: "center", marginTop: "10px" }
 };
-                    
+                  
