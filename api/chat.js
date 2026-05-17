@@ -14,7 +14,7 @@ You are Aashu AI.
 Friendly, smart and helpful AI assistant.
 `;
 
-    // Built-in Native Fetch use ho raha hai (No extra dependency needed)
+    // Built-in Native Fetch (Groq API Endpoint)
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -24,7 +24,8 @@ Friendly, smart and helpful AI assistant.
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: "llama3-8b-8192",
+          // 🚀 Updated working model (Purana llama3-8b-8192 decommission ho chuka hai)
+          model: "llama-3.3-70b-versatile", 
           messages: [
             {
               role: "system",
@@ -46,7 +47,7 @@ Friendly, smart and helpful AI assistant.
 
     const data = await response.json();
 
-    // 🔴 Agar Groq API koi error bhejti hai (Jaise Invalid Key)
+    // 🔴 Agar Groq API koi error bhejti hai
     if (data.error) {
       return res.status(400).json({
         reply: `Groq API Error: ${data.error.message || JSON.stringify(data.error)}`
@@ -60,7 +61,7 @@ Friendly, smart and helpful AI assistant.
       });
     }
 
-    // Default fallback agar response format achanak change ho jaye
+    // Default fallback
     return res.status(200).json({
       reply: "No AI response content available. Check Vercel logs."
     });
