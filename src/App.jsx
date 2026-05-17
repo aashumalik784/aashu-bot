@@ -5,7 +5,11 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [userName, setUserName] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [attachedImage, setAttachedImage] = useState(null); // File handle storage
   const chatEndRef = useRef(null);
+
+  // Hardcode configuration for your profile image safely
+  const profileImgPath = "/AASHU_MALIK.jpg";
 
   // 💾 MEMORY LOAD
   useEffect(() => {
@@ -25,9 +29,21 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ✉️ SEND LOGIC
+  // Handle Image Selection from user screen
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachedImage(reader.result); // Base64 raw context string storage
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // ✉️ SEND LOGIC WITH SCREENSHOT SUPPORT
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && !attachedImage) return;
 
     let currentName = userName;
     if (input.toLowerCase().includes("my name is")) {
@@ -39,11 +55,17 @@ export default function App() {
       }
     }
 
-    const userMessage = { role: "user", content: input };
+    // Build unique template mapping content
+    const userMessage = { 
+      role: "user", 
+      content: input,
+      image: attachedImage || null // Embed image safely if available
+    };
+    
     const updatedMessages = [...messages, userMessage];
-
     setMessages(updatedMessages);
     setInput("");
+    setAttachedImage(null); // Reset attachment interface display slot
 
     try {
       const res = await fetch("/api/chat", {
@@ -56,13 +78,9 @@ export default function App() {
       });
 
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.reply || `HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(data.reply || `HTTP ${res.status}`);
       
       setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
-      
     } catch (error) {
       console.error("Connection Error:", error);
       setMessages([
@@ -105,18 +123,9 @@ export default function App() {
         <div style={styles.navbar}>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={styles.menuBtn}>☰</button>
           <div style={styles.navBrand}>Aashu AI</div>
-          {/* 🖼️ AAPKI ASLI PHOTO APPLIED HERE */}
-          <img 
-            src="/AASHU_MALIK.jpg" 
-            alt="Aashu Malik" 
-            style={styles.avatarImage} 
-            onError={(e) => {
-              // Fallback agar image public folder mein na mile
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-          <div style={{...styles.avatarFallback, display: 'none'}}>AM</div>
+          <div style={styles.avatarWrapper}>
+            <img src={profileImgPath} alt="Aashu Malik" style={styles.avatarImage} onError={(e) => { e.target.src = "https://via.placeholder.com/150"; }} />
+          </div>
         </div>
 
         {/* CHAT WINDOW */}
@@ -135,12 +144,23 @@ export default function App() {
             <div style={styles.messagesList}>
               {messages.map((m, i) => (
                 <div key={i} style={m.role === "user" ? styles.userRow : styles.aiRow}>
-                  <div style={m.role === "user" ? styles.userAvatar : styles.aiAvatar}>
-                    {m.role === "user" ? "👤" : "✨"}
+                  <div style={m.role === "user" ? styles.userAvatarContainer : styles.aiAvatar}>
+                    {m.role === "user" ? (
+                      <img src={profileImgPath} alt="User" style={styles.chatUserImg} onError={(e) => { e.target.style.display='none'; }} />
+                    ) : (
+                      "✨"
+                    )}
                   </div>
                   <div style={styles.messageContent}>
                     <div style={styles.senderName}>{m.role === "user" ? "You" : "Aashu AI"}</div>
-                    <div style={styles.textBody}>{m.content}</div>
+                    <div style={styles.textBody}>
+                      {m.content}
+                      {m.image && (
+                        <div style={styles.chatImageWrapper}>
+                          <img src={m.image} alt="Uploaded Screenshot" style={styles.chatEmbeddedImage} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -149,20 +169,37 @@ export default function App() {
           )}
         </div>
 
-        {/* INPUT CONTROLS */}
+        {/* FLOATING INPUT ENGINE & ATTACHMENT HUB */}
         <div style={styles.inputContainer}>
+          {attachedImage && (
+            <div style={styles.previewContainer}>
+              <img src={attachedImage} alt="Attachment Preview" style={styles.previewThumb} />
+              <button onClick={() => setAttachedImage(null)} style={styles.removePreviewBtn}>✕</button>
+            </div>
+          )}
+          
           <div style={styles.inputWrapper}>
+            {/* FILE INPUT FIELD ACCESSED BY LABEL CLIP ICON */}
+            <label htmlFor="screenshot-upload" style={styles.clipLabel}>📎</label>
+            <input 
+              id="screenshot-upload" 
+              type="file" 
+              accept="image/*" 
+              onChange={handleImageChange} 
+              style={{ display: "none" }} 
+            />
+            
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Ask Aashu AI anything..."
+              placeholder="Ask Aashu AI or attach screenshots..."
               style={styles.input}
             />
             <button onClick={sendMessage} style={styles.sendBtn}>➤</button>
           </div>
           <div style={styles.footerDisclaimer}>
-            Aashu AI can make mistakes. Consider checking important info.
+            Aashu AI can analyze text and visual layouts code errors.
           </div>
         </div>
 
@@ -184,8 +221,8 @@ const styles = {
   navbar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: "#131314" },
   menuBtn: { background: "none", border: "none", color: "#e3e3e3", fontSize: "20px", cursor: "pointer" },
   navBrand: { fontSize: "18px", fontWeight: "500", color: "#c4c7c5" },
-  avatarImage: { width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover", border: "2px solid #3c4043" },
-  avatarFallback: { width: "36px", height: "36px", borderRadius: "50%", background: "#004a77", color: "#c2e7ff", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "600" },
+  avatarWrapper: { width: "36px", height: "36px", borderRadius: "50%", overflow: "hidden", border: "2px solid #3c4043", background: "#3c4043" },
+  avatarImage: { width: "100%", height: "100%", objectFit: "cover" },
   chatWindow: { flex: 1, overflowY: "auto", padding: "10px 0" },
   welcomeContainer: { maxWidth: "700px", margin: "80px auto 0", padding: "0 20px" },
   welcomeText: { fontSize: "40px", fontWeight: "500", background: "linear-gradient(45deg, #4285f4, #9b51e0, #e91e63)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: "0 0 10px 0" },
@@ -195,15 +232,22 @@ const styles = {
   messagesList: { maxWidth: "750px", margin: "0 auto", padding: "20px" },
   userRow: { display: "flex", flexDirection: "row-reverse", gap: "15px", marginBottom: "30px", alignItems: "flex-start" },
   aiRow: { display: "flex", gap: "15px", marginBottom: "30px", alignItems: "flex-start" },
-  userAvatar: { width: "36px", height: "36px", borderRadius: "50%", background: "#3c4043", display: "flex", alignItems: "center", justifyContent: "center" },
+  userAvatarContainer: { width: "36px", height: "36px", borderRadius: "50%", overflow: "hidden", background: "#3c4043" },
+  chatUserImg: { width: "100%", height: "100%", objectFit: "cover" },
   aiAvatar: { width: "36px", height: "36px", borderRadius: "50%", background: "linear-gradient(135deg, #1a73e8, #9b51e0)", display: "flex", alignItems: "center", justifyContent: "center" },
   messageContent: { flex: 1 },
   senderName: { fontSize: "13px", color: "#9aa0a6", marginBottom: "4px", fontWeight: "600" },
   textBody: { fontSize: "15px", color: "#e3e3e3", lineHeight: "1.6", whiteSpace: "pre-wrap" },
+  chatImageWrapper: { marginTop: "10px", borderRadius: "8px", overflow: "hidden", maxWidth: "300px", border: "1px solid #3c4043" },
+  chatEmbeddedImage: { width: "100%", height: "auto", display: "block" },
   inputContainer: { maxWidth: "750px", width: "100%", margin: "0 auto", padding: "0 20px 20px 20px" },
-  inputWrapper: { display: "flex", alignItems: "center", background: "#1e1f20", borderRadius: "32px", padding: "8px 16px 8px 24px", border: "1px solid transparent" },
+  previewContainer: { display: "flex", alignItems: "center", background: "#1e1f20", padding: "8px", borderRadius: "8px", width: "fit-content", marginBottom: "10px", gap: "8px", border: "1px solid #3c4043" },
+  previewThumb: { width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" },
+  removePreviewBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", fontSize: "14px" },
+  inputWrapper: { display: "flex", alignItems: "center", background: "#1e1f20", borderRadius: "32px", padding: "8px 16px 8px 20px", border: "1px solid transparent" },
+  clipLabel: { fontSize: "20px", cursor: "pointer", marginRight: "12px", color: "#9aa0a6", userSelect: "none" },
   input: { flex: 1, background: "transparent", border: "none", color: "#e3e3e3", fontSize: "16px", outline: "none", padding: "10px 0" },
   sendBtn: { background: "none", border: "none", color: "#a8c7fa", fontSize: "20px", cursor: "pointer", padding: "0 8px" },
   footerDisclaimer: { fontSize: "12px", color: "#9aa0a6", textAlign: "center", marginTop: "10px" }
 };
-                  
+        
