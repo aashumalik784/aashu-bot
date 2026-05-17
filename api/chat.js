@@ -32,7 +32,7 @@ Rules: Respond casually, use beautiful markdown bullet points for lists, and spe
       return res.status(200).json({ reply: "⚠️ Backend Config Error: Vercel par 'GROQ_API_KEY' missing hai." });
     }
 
-    // Map content formats into OpenAI/Groq Vision payload structure
+    // Map content formats into OpenAI/Groq Vision payload structure safely
     const groqMessages = [
       { role: "system", content: personality },
       ...(userProfile ? [{ role: "system", content: `User Profile: ${JSON.stringify(userProfile)}` }] : [])
@@ -52,7 +52,8 @@ Rules: Respond casually, use beautiful markdown bullet points for lists, and spe
         
         groqMessages.push({ role: "user", content: contentArray });
       } else {
-        groqMessages.push({ role: m.role, content: msg.content });
+        // FIXED THE BUG HERE: Changed m.role to msg.role safely
+        groqMessages.push({ role: msg.role, content: msg.content });
       }
     });
 
@@ -63,7 +64,7 @@ Rules: Respond casually, use beautiful markdown bullet points for lists, and spe
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile", // Vision and high scale reasoning support active
+        model: "llama-3.3-70b-versatile", 
         messages: groqMessages,
         temperature: 0.7
       })
