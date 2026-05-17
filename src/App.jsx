@@ -2,84 +2,119 @@ import { useState, useEffect, useRef } from "react";
 
 export default function App() {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [userName, setUserName] = useState("");
+  const [conversations, setConversations] = useState({}); 
+  const [activeChatId, setActiveChatId] = useState(""); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [attachedImage, setAttachedImage] = useState(null);
-  const [isListening, setIsListening] = useState(false);
+  const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
   const profileImgPath = "/AASHU_MALIK.jpg";
 
-  // 💾 MEMORY LOAD
+  // Load saved history on startup
   useEffect(() => {
-    const savedChat = localStorage.getItem("chat");
-    const savedName = localStorage.getItem("name");
-    if (savedChat) setMessages(JSON.parse(savedChat));
-    if (savedName) setUserName(savedName);
+    const savedChats = localStorage.getItem("aashu_ai_chats");
+    const savedActiveId = localStorage.getItem("aashu_ai_active_id");
+    
+    if (savedChats && savedChats !== "{}") {
+      const parsed = JSON.parse(savedChats);
+      setConversations(parsed);
+      if (savedActiveId && parsed[savedActiveId]) {
+        setActiveChatId(savedActiveId);
+      } else {
+        setActiveChatId(Object.keys(parsed)[0]);
+      }
+    } else {
+      initInitialChat();
+    }
     
     if (window.innerWidth < 768) setIsSidebarOpen(false);
   }, []);
 
-  // 💾 AUTO-SCROLL
-  useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem("chat", JSON.stringify(messages));
-    }
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const initInitialChat = () => {
+    const newId = "chat_" + Date.now();
+    const initial = {
+      [newId]: { id: newId, title: "New Conversation", history: [] }
+    };
+    setConversations(initial);
+    setActiveChatId(newId);
+    localStorage.setItem("aashu_ai_chats", JSON.stringify(initial));
+    localStorage.setItem("aashu_ai_active_id", newId);
+  };
 
-  // 🎙️ VOICE RECOGNITION (MIC FEATURE)
-  const startVoiceInput = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Aapka browser voice recognition support nahi karta. Chrome use karein.");
+  const createNewChat = () => {
+    const newId = "chat_" + Date.now();
+    const updated = {
+      [newId]: { id: newId, title: `Chat Session ${Object.keys(conversations).length + 1}`, history: [] },
+      ...conversations
+    };
+    setConversations(updated);
+    setActiveChatId(newId);
+    localStorage.setItem("aashu_ai_chats", JSON.stringify(updated));
+    localStorage.setItem("aashu_ai_active_id", newId);
+    if (window.innerWidth < 768) setIsSidebarOpen(false);
+  };
+
+  const deleteChat = (id, e) => {
+    e.stopPropagation(); 
+    const updated = { ...conversations };
+    delete updated[id];
+    
+    if (Object.keys(updated).length === 0) {
+      localStorage.removeItem("aashu_ai_chats");
+      localStorage.removeItem("aashu_ai_active_id");
+      initInitialChat();
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "hi-IN"; // Set to Hindi/Hinglish interpretation
-    recognition.interimResults = false;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
+    setConversations(updated);
+    localStorage.setItem("aashu_ai_chats", JSON.stringify(updated));
     
-    recognition.onresult = (event) => {
-      const speechToText = event.results[0][0].transcript;
-      setInput(speechToText);
-    };
+    if (id === activeChatId) {
+      const nextId = Object.keys(updated)[0];
+      setActiveChatId(nextId);
+      localStorage.setItem("aashu_ai_active_id", nextId);
+    }
+  };
 
-    recognition.start();
+  const selectChat = (id) => {
+    setActiveChatId(id);
+    localStorage.setItem("aashu_ai_active_id", id);
+    if (window.innerWidth < 768) setIsSidebarOpen(false); 
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setAttachedImage(reader.result);
-      };
+      reader.onloadend = () => setAttachedImage(reader.result);
       reader.readAsDataURL(file);
     }
   };
 
-  // ✉️ SEND LOGIC
   const sendMessage = async () => {
     if (!input.trim() && !attachedImage) return;
+    if (!activeChatId) return;
 
-    let currentName = userName;
-    if (input.toLowerCase().includes("my name is")) {
-      const name = input.split(/is/i)[1]?.trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
-      if (name) {
-        setUserName(name);
-        currentName = name;
-        localStorage.setItem("name", name);
-      }
+    setLoading(true);
+    const userMessage = { role: "user", content: input, image: attachedImage || null };
+    
+    const currentChat = conversations[activeChatId] || { history: [], title: "Chat" };
+    const updatedHistory = [...currentChat.history, userMessage];
+    
+    let dynamicTitle = currentChat.title;
+    if (currentChat.history.length === 0 && input.trim()) {
+      dynamicTitle = input.substring(0, 20) + "...";
     }
 
-    const userMessage = { role: "user", content: input, image: attachedImage || null };
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    const updatedConversations = {
+      ...conversations,
+      [activeChatId]: { ...currentChat, title: dynamicTitle, history: updatedHistory }
+    };
+
+    setConversations(updatedConversations);
+    localStorage.setItem("aashu_ai_chats", JSON.stringify(updatedConversations));
+    
     setInput("");
     setAttachedImage(null);
 
@@ -87,184 +122,172 @@ export default function App() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          userProfile: { name: currentName }
-        })
+        body: JSON.stringify({ messages: updatedHistory })
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.reply || `HTTP ${res.status}`);
       
-      setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
+      const finalConversations = {
+        ...updatedConversations,
+        [activeChatId]: {
+          ...updatedConversations[activeChatId],
+          history: [...updatedHistory, { role: "assistant", content: data.reply }]
+        }
+      };
+      
+      setConversations(finalConversations);
+      localStorage.setItem("aashu_ai_chats", JSON.stringify(finalConversations));
     } catch (error) {
-      setMessages([
-        ...updatedMessages, 
-        { role: "assistant", content: `⚠️ Connection Error Details: ${error.message}` }
-      ]);
+      console.error(error);
+    } finally {
+      setLoading(false);
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   };
 
-  const clearChat = () => {
-    if (window.confirm("Kya aap poori chat clear karna chahte hain?")) {
-      localStorage.removeItem("chat");
-      setMessages([]);
-    }
-  };
+  const currentMessages = conversations[activeChatId]?.history || [];
 
   return (
     <div style={styles.appContainer}>
-      
-      {/* SIDEBAR */}
-      <div style={{...styles.sidebar, width: isSidebarOpen ? "260px" : "0px", opacity: isSidebarOpen ? 1 : 0}}>
+      {/* 📊 SIDE PANEL (RECORD & HISTORIES VIEW) */}
+      <div style={{...styles.sidebar, width: isSidebarOpen ? "280px" : "0px", opacity: isSidebarOpen ? 1 : 0}}>
         <div style={styles.sidebarHeader}>
-          <button onClick={clearChat} style={styles.newChatBtn}>＋ New Chat</button>
+          <button onClick={createNewChat} style={styles.newChatBtn}>＋ New Chat</button>
         </div>
         <div style={styles.sidebarBody}>
           <div style={styles.historyHeading}>Recent Activity</div>
-          {messages.length > 0 && (
-            <div style={styles.historyItem}>💬 Current Discussion</div>
-          )}
+          <div style={styles.historyList}>
+            {Object.values(conversations).map((chat) => (
+              <div 
+                key={chat.id} 
+                onClick={() => selectChat(chat.id)}
+                style={{
+                  ...styles.historyItem, 
+                  background: chat.id === activeChatId ? "#2c2d2f" : "transparent"
+                }}
+              >
+                <div style={styles.itemLeft}>
+                  <span style={styles.chatIcon}>💬</span>
+                  <span style={styles.chatTitleText}>{chat.title}</span>
+                </div>
+                <button onClick={(e) => deleteChat(chat.id, e)} style={styles.deleteChatBtn}>🗑️</button>
+              </div>
+            ))}
+          </div>
         </div>
-        <div style={styles.sidebarFooter}>
-          User: {userName || "Aashu Malik"}
-        </div>
+        <div style={styles.sidebarFooter}>User: Aashu Malik</div>
       </div>
 
-      {/* MAIN CONTENT */}
+      {/* 📱 CORE CHAT SCREEN */}
       <div style={styles.mainContent}>
-        
-        {/* NAVBAR */}
         <div style={styles.navbar}>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={styles.menuBtn}>☰</button>
-          <div style={styles.navBrand}>Aashu AI Super</div>
+          <div style={styles.navBrand}>Aashu AI Super Engine</div>
           <div style={styles.avatarWrapper}>
-            <img src={profileImgPath} alt="Aashu Malik" style={styles.avatarImage} onError={(e) => { e.target.src = "https://via.placeholder.com/150"; }} />
+            <img src={profileImgPath} alt="User" style={styles.avatarImage} onError={(e) => { e.target.src = "https://via.placeholder.com/150"; }} />
           </div>
         </div>
 
-        {/* CHAT WINDOW */}
         <div style={styles.chatWindow}>
-          {messages.length === 0 ? (
+          {currentMessages.length === 0 ? (
             <div style={styles.welcomeContainer}>
-              <h1 style={styles.welcomeText}>Hello, {userName || "Aashu"}</h1>
-              <p style={styles.subWelcomeText}>How can I help you collaborate today?</p>
-              
-              <div style={styles.suggestionGrid}>
-                <div onClick={() => setInput("Write a clean python backend function")} style={styles.suggestCard}>💡 Code Design</div>
-                <div onClick={() => setInput("Give me some viral ideas for my YouTube video")} style={styles.suggestCard}>🚀 Content Ideas</div>
-              </div>
+              <h1 style={styles.welcomeText}>Hello, Aashu</h1>
+              <p style={styles.subWelcomeText}>Your multi-engine core is active. Ask me anything.</p>
             </div>
           ) : (
             <div style={styles.messagesList}>
-              {messages.map((m, i) => (
+              {currentMessages.map((m, i) => (
                 <div key={i} style={m.role === "user" ? styles.userRow : styles.aiRow}>
                   <div style={m.role === "user" ? styles.userAvatarContainer : styles.aiAvatar}>
-                    {m.role === "user" ? (
-                      <img src={profileImgPath} alt="User" style={styles.chatUserImg} onError={(e) => { e.target.style.display='none'; }} />
-                    ) : (
-                      "✨"
-                    )}
+                    {m.role === "user" ? <img src={profileImgPath} style={styles.chatUserImg} alt="M" /> : "✨"}
                   </div>
                   <div style={styles.messageContent}>
                     <div style={styles.senderName}>{m.role === "user" ? "You" : "Aashu AI"}</div>
-                    <div style={styles.textBody}>
-                      {m.content}
-                      {m.image && (
-                        <div style={styles.chatImageWrapper}>
-                          <img src={m.image} alt="Uploaded Screenshot" style={styles.chatEmbeddedImage} />
-                        </div>
-                      )}
-                    </div>
+                    <div style={styles.textBody}>{m.content}</div>
+                    {m.image && (
+                      <div style={styles.chatImageWrapper}>
+                        <img src={m.image} alt="Layout Upload" style={styles.chatEmbeddedImage} />
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
+              {loading && <div style={styles.loadingText}>Engine processing response...</div>}
               <div ref={chatEndRef} />
             </div>
           )}
         </div>
 
-        {/* INPUT CONTROLS */}
+        {/* Responsive Mobile-Ready Text Input View */}
         <div style={styles.inputContainer}>
           {attachedImage && (
             <div style={styles.previewContainer}>
-              <img src={attachedImage} alt="Attachment Preview" style={styles.previewThumb} />
+              <img src={attachedImage} style={styles.previewThumb} alt="P" />
               <button onClick={() => setAttachedImage(null)} style={styles.removePreviewBtn}>✕</button>
             </div>
           )}
-          
           <div style={styles.inputWrapper}>
-            <label htmlFor="screenshot-upload" style={styles.clipLabel}>📎</label>
-            <input id="screenshot-upload" type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
-            
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Ask Aashu AI or talk to microphone..."
-              style={styles.input}
+            <label htmlFor="screenshot-input" style={styles.clipLabel}>📎</label>
+            <input id="screenshot-input" type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+            <input 
+              type="text"
+              value={input} 
+              onChange={(e) => setInput(e.target.value)} 
+              onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
+              placeholder="Type message..." 
+              style={styles.input} 
             />
-            
-            {/* 🎙️ DYNAMIC MIC BUTTON */}
-            <button 
-              onClick={startVoiceInput} 
-              style={{...styles.micBtn, color: isListening ? "#ea4335" : "#9aa0a6"}}
-            >
-              {isListening ? "🛑" : "🎙️"}
-            </button>
-
             <button onClick={sendMessage} style={styles.sendBtn}>➤</button>
           </div>
-          <div style={styles.footerDisclaimer}>
-            Aashu AI Super Engine: Multimodal Voice, Vision and Reasoning Suite active.
-          </div>
         </div>
-
       </div>
     </div>
   );
 }
 
 const styles = {
-  appContainer: { display: "flex", height: "100vh", background: "#131314", color: "#e3e3e3", fontFamily: "'Segoe UI', system-ui, sans-serif", overflow: "hidden" },
-  sidebar: { background: "#1e1f20", display: "flex", flexDirection: "column", transition: "all 0.3s ease", overflow: "hidden", borderRight: "1px solid #28292a" },
-  sidebarHeader: { padding: "20px 15px" },
-  newChatBtn: { width: "100%", padding: "12px", background: "#1a1a1a", border: "1px solid #3c4043", color: "#a8c7fa", borderRadius: "24px", cursor: "pointer", fontWeight: "600", fontSize: "14px" },
-  sidebarBody: { flex: 1, padding: "10px 15px" },
-  historyHeading: { fontSize: "12px", color: "#9aa0a6", fontWeight: "600", marginBottom: "15px", paddingLeft: "10px" },
-  historyItem: { padding: "10px", background: "rgba(255,255,255,0.04)", borderRadius: "8px", fontSize: "14px", color: "#c4c7c5", cursor: "pointer" },
-  sidebarFooter: { padding: "20px", fontSize: "13px", color: "#9aa0a6", borderTop: "1px solid #28292a", textAlign: "center" },
-  mainContent: { flex: 1, display: "flex", flexDirection: "column", height: "100%", position: "relative" },
-  navbar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: "#131314" },
-  menuBtn: { background: "none", border: "none", color: "#e3e3e3", fontSize: "20px", cursor: "pointer" },
-  navBrand: { fontSize: "18px", fontWeight: "500", color: "#c4c7c5" },
-  avatarWrapper: { width: "36px", height: "36px", borderRadius: "50%", overflow: "hidden", border: "2px solid #3c4043", background: "#28292a" },
+  appContainer: { display: "flex", height: "100vh", background: "#131314", color: "#e3e3e3", fontFamily: "sans-serif", overflow: "hidden" },
+  sidebar: { background: "#1e1f20", display: "flex", flexDirection: "column", transition: "all 0.25s ease-in-out", overflow: "hidden" },
+  sidebarHeader: { padding: "16px" },
+  newChatBtn: { width: "100%", padding: "12px", background: "#1a1a1a", border: "1px solid #3c4043", color: "#a8c7fa", borderRadius: "24px", cursor: "pointer", fontWeight: "600" },
+  sidebarBody: { flex: 1, padding: "10px", overflowY: "auto" },
+  historyHeading: { fontSize: "12px", color: "#9aa0a6", paddingLeft: "10px", marginBottom: "10px", fontWeight: "600" },
+  historyList: { display: "flex", flexDirection: "column", gap: "6px" },
+  historyItem: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", borderRadius: "12px", cursor: "pointer", color: "#e3e3e3" },
+  itemLeft: { display: "flex", alignItems: "center", overflow: "hidden", flex: 1 },
+  chatIcon: { marginRight: "8px" },
+  chatTitleText: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "14px" },
+  deleteChatBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", fontSize: "14px", padding: "4px" },
+  sidebarFooter: { padding: "16px", fontSize: "13px", color: "#9aa0a6", borderTop: "1px solid #28292a", textAlign: "center" },
+  mainContent: { flex: 1, display: "flex", flexDirection: "column", minWidth: "0" },
+  navbar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px" },
+  menuBtn: { background: "none", border: "none", color: "#e3e3e3", fontSize: "22px", cursor: "pointer" },
+  navBrand: { fontSize: "18px", fontWeight: "500" },
+  avatarWrapper: { width: "34px", height: "34px", borderRadius: "50%", overflow: "hidden" },
   avatarImage: { width: "100%", height: "100%", objectFit: "cover" },
-  chatWindow: { flex: 1, overflowY: "auto", padding: "10px 0" },
-  welcomeContainer: { maxWidth: "700px", margin: "80px auto 0", padding: "0 20px" },
-  welcomeText: { fontSize: "40px", fontWeight: "500", background: "linear-gradient(45deg, #4285f4, #9b51e0, #e91e63)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: "0 0 10px 0" },
-  subWelcomeText: { fontSize: "22px", color: "#444746", margin: "0 0 40px 0", fontWeight: "500" },
-  suggestionGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "15px" },
-  suggestCard: { background: "#1e1f20", padding: "20px", borderRadius: "12px", cursor: "pointer", border: "1px solid transparent", transition: "all 0.2s", fontSize: "14px", lineHeight: "1.4" },
-  messagesList: { maxWidth: "750px", margin: "0 auto", padding: "20px" },
-  userRow: { display: "flex", flexDirection: "row-reverse", gap: "15px", marginBottom: "30px", alignItems: "flex-start" },
-  aiRow: { display: "flex", gap: "15px", marginBottom: "30px", alignItems: "flex-start" },
-  userAvatarContainer: { width: "36px", height: "36px", borderRadius: "50%", overflow: "hidden", background: "#28292a" },
+  chatWindow: { flex: 1, overflowY: "auto" },
+  welcomeContainer: { maxWidth: "600px", margin: "100px auto 0", padding: "0 20px", textAlign: "center" },
+  welcomeText: { fontSize: "36px", background: "linear-gradient(45deg, #a8c7fa, #ccbcfb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
+  subWelcomeText: { fontSize: "16px", color: "#80868b", marginTop: "10px" },
+  messagesList: { maxWidth: "700px", margin: "0 auto", padding: "20px" },
+  userRow: { display: "flex", flexDirection: "row-reverse", gap: "12px", marginBottom: "24px" },
+  aiRow: { display: "flex", gap: "12px", marginBottom: "24px" },
+  userAvatarContainer: { width: "32px", height: "32px", borderRadius: "50%", overflow: "hidden", flexShrink: 0 },
   chatUserImg: { width: "100%", height: "100%", objectFit: "cover" },
-  aiAvatar: { width: "36px", height: "36px", borderRadius: "50%", background: "linear-gradient(135deg, #1a73e8, #9b51e0)", display: "flex", alignItems: "center", justifyContent: "center" },
+  aiAvatar: { width: "32px", height: "32px", borderRadius: "50%", background: "#3c4043", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "14px" },
   messageContent: { flex: 1 },
-  senderName: { fontSize: "13px", color: "#9aa0a6", marginBottom: "4px", fontWeight: "600" },
-  textBody: { fontSize: "15px", color: "#e3e3e3", lineHeight: "1.6", whiteSpace: "pre-wrap" },
-  chatImageWrapper: { marginTop: "10px", borderRadius: "8px", overflow: "hidden", maxWidth: "300px", border: "1px solid #3c4043" },
-  chatEmbeddedImage: { width: "100%", height: "auto", display: "block" },
-  inputContainer: { maxWidth: "750px", width: "100%", margin: "0 auto", padding: "0 20px 20px 20px" },
-  previewContainer: { display: "flex", alignItems: "center", background: "#1e1f20", padding: "8px", borderRadius: "8px", width: "fit-content", marginBottom: "10px", gap: "8px", border: "1px solid #3c4043" },
+  senderName: { fontSize: "12px", color: "#9aa0a6", marginBottom: "4px", fontWeight: "600" },
+  textBody: { fontSize: "15px", lineHeight: "1.5", whiteSpace: "pre-wrap" },
+  loadingText: { fontSize: "14px", color: "#9aa0a6", padding: "20px", textAlign: "center" },
+  chatImageWrapper: { marginTop: "10px", borderRadius: "8px", overflow: "hidden" },
+  chatEmbeddedImage: { maxWidth: "100%", maxHeight: "250px", objectFit: "contain" },
+  inputContainer: { maxWidth: "700px", width: "100%", margin: "0 auto", padding: "0 16px 16px" },
+  previewContainer: { display: "flex", alignItems: "center", background: "#1e1f20", padding: "6px", borderRadius: "8px", width: "fit-content", marginBottom: "8px" },
   previewThumb: { width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" },
-  removePreviewBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", fontSize: "14px" },
-  inputWrapper: { display: "flex", alignItems: "center", background: "#1e1f20", borderRadius: "32px", padding: "8px 16px 8px 16px", border: "1px solid transparent" },
-  clipLabel: { fontSize: "20px", cursor: "pointer", marginRight: "12px", color: "#9aa0a6", userSelect: "none" },
-  input: { flex: 1, background: "transparent", border: "none", color: "#e3e3e3", fontSize: "16px", outline: "none", padding: "10px 0" },
-  micBtn: { background: "none", border: "none", fontSize: "20px", cursor: "pointer", padding: "0 8px", transition: "all 0.2s" },
-  sendBtn: { background: "none", border: "none", color: "#a8c7fa", fontSize: "20px", cursor: "pointer", padding: "0 8px" },
+  removePreviewBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", marginLeft: "6px" },
+  inputWrapper: { display: "flex", alignItems: "center", background: "#1e1f20", borderRadius: "24px", padding: "6px 16px" },
+  clipLabel: { fontSize: "20px", cursor: "pointer", marginRight: "12px", color: "#9aa0a6" },
+  input: { flex: 1, background: "transparent", border: "none", color: "#e3e3e3", fontSize: "16px", outline: "none" },
+  sendBtn: { background: "none", border: "none", color: "#a8c7fa", fontSize: "20px", cursor: "pointer", marginLeft: "8px" }
 };
-                   
+                       
