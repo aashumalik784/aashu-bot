@@ -1,3 +1,5 @@
+// Live Active Multi-Core Engine v3.0
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
