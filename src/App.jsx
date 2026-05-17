@@ -11,7 +11,6 @@ export default function App() {
 
   const profileImgPath = "/AASHU_MALIK.jpg";
 
-  // Load saved history on startup
   useEffect(() => {
     const savedChats = localStorage.getItem("aashu_ai_chats");
     const savedActiveId = localStorage.getItem("aashu_ai_active_id");
@@ -27,7 +26,6 @@ export default function App() {
     } else {
       initInitialChat();
     }
-    
     if (window.innerWidth < 768) setIsSidebarOpen(false);
   }, []);
 
@@ -141,15 +139,40 @@ export default function App() {
       console.error(error);
     } finally {
       setLoading(false);
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
+  };
+
+  // 🌍 SMART PARSER UTILITY FOR AUTO CLICKABLE LINKS & MD PARSING
+  const renderFormattedText = (text) => {
+    if (!text) return "";
+    
+    // 1. Convert markdown style hyperlinks [Text](Url) into clickable anchor tags
+    let formatted = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #a8c7fa; text-decoration: underline; font-weight: 600;">$1</a>');
+    
+    // 2. Fallback: Parse any loose unformatted urls (http:// or https://) into blue links automatically
+    const urlRegex = /(?<!href=")(https?:\/\/[^\s<]+)/g;
+    formatted = formatted.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #a8c7fa; text-decoration: underline; font-weight: 600;">$1</a>');
+
+    // 3. Fix simple code-block rendering wrapper lines
+    if (formatted.includes("```")) {
+      const segments = formatted.split("```");
+      return segments.map((seg, idx) => {
+        if (idx % 2 !== 0) {
+          return <pre key={idx} style={styles.codeBlock}><code>{seg.replace(/^[a-zA-清]+/, "").trim()}</code></pre>;
+        }
+        return <span key={idx} dangerouslySetInnerHTML={{ __html: seg }} />;
+      });
+    }
+
+    return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
   };
 
   const currentMessages = conversations[activeChatId]?.history || [];
 
   return (
     <div style={styles.appContainer}>
-      {/* 📊 SIDE PANEL (RECORD & HISTORIES VIEW) */}
+      {/* 📊 SIDE PANEL */}
       <div style={{...styles.sidebar, width: isSidebarOpen ? "280px" : "0px", opacity: isSidebarOpen ? 1 : 0}}>
         <div style={styles.sidebarHeader}>
           <button onClick={createNewChat} style={styles.newChatBtn}>＋ New Chat</button>
@@ -178,13 +201,13 @@ export default function App() {
         <div style={styles.sidebarFooter}>User: Aashu Malik</div>
       </div>
 
-      {/* 📱 CORE CHAT SCREEN */}
+      {/* 📱 MAIN CONSOLE */}
       <div style={styles.mainContent}>
         <div style={styles.navbar}>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={styles.menuBtn}>☰</button>
-          <div style={styles.navBrand}>Aashu AI Super Engine</div>
+          <div style={styles.navBrand}>Aashu AI Super Console</div>
           <div style={styles.avatarWrapper}>
-            <img src={profileImgPath} alt="User" style={styles.avatarImage} onError={(e) => { e.target.src = "https://via.placeholder.com/150"; }} />
+            <img src={profileImgPath} alt="User Asset" style={styles.avatarImage} onError={(e) => { e.target.src = "https://via.placeholder.com/150"; }} />
           </div>
         </div>
 
@@ -192,7 +215,7 @@ export default function App() {
           {currentMessages.length === 0 ? (
             <div style={styles.welcomeContainer}>
               <h1 style={styles.welcomeText}>Hello, Aashu</h1>
-              <p style={styles.subWelcomeText}>Your multi-engine core is active. Ask me anything.</p>
+              <p style={styles.subWelcomeText}>All hybrid API nodes are live. Ask me anything.</p>
             </div>
           ) : (
             <div style={styles.messagesList}>
@@ -203,22 +226,30 @@ export default function App() {
                   </div>
                   <div style={styles.messageContent}>
                     <div style={styles.senderName}>{m.role === "user" ? "You" : "Aashu AI"}</div>
-                    <div style={styles.textBody}>{m.content}</div>
+                    <div style={styles.textBody}>{renderFormattedText(m.content)}</div>
                     {m.image && (
                       <div style={styles.chatImageWrapper}>
-                        <img src={m.image} alt="Layout Upload" style={styles.chatEmbeddedImage} />
+                        <img src={m.image} alt="Workspace Asset" style={styles.chatEmbeddedImage} />
                       </div>
                     )}
                   </div>
                 </div>
               ))}
-              {loading && <div style={styles.loadingText}>Engine processing response...</div>}
+              {loading && (
+                <div style={styles.aiRow}>
+                  <div style={styles.aiAvatar}>🔄</div>
+                  <div style={styles.messageContent}>
+                    <div style={styles.senderName}>Aashu AI</div>
+                    <div style={styles.loadingText}>Thinking... Processing layout...</div>
+                  </div>
+                </div>
+              )}
               <div ref={chatEndRef} />
             </div>
           )}
         </div>
 
-        {/* Responsive Mobile-Ready Text Input View */}
+        {/* Dynamic Mobile Textarea Layout Setup */}
         <div style={styles.inputContainer}>
           {attachedImage && (
             <div style={styles.previewContainer}>
@@ -229,12 +260,12 @@ export default function App() {
           <div style={styles.inputWrapper}>
             <label htmlFor="screenshot-input" style={styles.clipLabel}>📎</label>
             <input id="screenshot-input" type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
-            <input 
-              type="text"
+            <textarea 
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
-              onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
-              placeholder="Type message..." 
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              placeholder="Type message or paste url..." 
+              rows={1}
               style={styles.input} 
             />
             <button onClick={sendMessage} style={styles.sendBtn}>➤</button>
@@ -247,7 +278,7 @@ export default function App() {
 
 const styles = {
   appContainer: { display: "flex", height: "100vh", background: "#131314", color: "#e3e3e3", fontFamily: "sans-serif", overflow: "hidden" },
-  sidebar: { background: "#1e1f20", display: "flex", flexDirection: "column", transition: "all 0.25s ease-in-out", overflow: "hidden" },
+  sidebar: { background: "#1e1f20", display: "flex", flexDirection: "column", transition: "all 0.25s ease-in-out", overflow: "hidden", borderRight: "1px solid #28292a" },
   sidebarHeader: { padding: "16px" },
   newChatBtn: { width: "100%", padding: "12px", background: "#1a1a1a", border: "1px solid #3c4043", color: "#a8c7fa", borderRadius: "24px", cursor: "pointer", fontWeight: "600" },
   sidebarBody: { flex: 1, padding: "10px", overflowY: "auto" },
@@ -257,13 +288,13 @@ const styles = {
   itemLeft: { display: "flex", alignItems: "center", overflow: "hidden", flex: 1 },
   chatIcon: { marginRight: "8px" },
   chatTitleText: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "14px" },
-  deleteChatBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", fontSize: "14px", padding: "4px" },
+  deleteChatBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", fontSize: "14px" },
   sidebarFooter: { padding: "16px", fontSize: "13px", color: "#9aa0a6", borderTop: "1px solid #28292a", textAlign: "center" },
   mainContent: { flex: 1, display: "flex", flexDirection: "column", minWidth: "0" },
   navbar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px" },
   menuBtn: { background: "none", border: "none", color: "#e3e3e3", fontSize: "22px", cursor: "pointer" },
   navBrand: { fontSize: "18px", fontWeight: "500" },
-  avatarWrapper: { width: "34px", height: "34px", borderRadius: "50%", overflow: "hidden" },
+  avatarWrapper: { width: "34px", height: "34px", borderRadius: "50%", overflow: "hidden", border: "1px solid #3c4043" },
   avatarImage: { width: "100%", height: "100%", objectFit: "cover" },
   chatWindow: { flex: 1, overflowY: "auto" },
   welcomeContainer: { maxWidth: "600px", margin: "100px auto 0", padding: "0 20px", textAlign: "center" },
@@ -275,19 +306,20 @@ const styles = {
   userAvatarContainer: { width: "32px", height: "32px", borderRadius: "50%", overflow: "hidden", flexShrink: 0 },
   chatUserImg: { width: "100%", height: "100%", objectFit: "cover" },
   aiAvatar: { width: "32px", height: "32px", borderRadius: "50%", background: "#3c4043", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "14px" },
-  messageContent: { flex: 1 },
+  messageContent: { flex: 1, minWidth: "0" },
   senderName: { fontSize: "12px", color: "#9aa0a6", marginBottom: "4px", fontWeight: "600" },
-  textBody: { fontSize: "15px", lineHeight: "1.5", whiteSpace: "pre-wrap" },
-  loadingText: { fontSize: "14px", color: "#9aa0a6", padding: "20px", textAlign: "center" },
+  textBody: { fontSize: "15px", lineHeight: "1.6", whiteSpace: "pre-wrap", color: "#e3e3e3" },
+  codeBlock: { background: "#1e1f20", padding: "14px", borderRadius: "8px", overflowX: "auto", fontFamily: "monospace", color: "#f8f8f2", marginTop: "10px" },
+  loadingText: { fontSize: "14px", color: "#9aa0a6", fontStyle: "italic" },
   chatImageWrapper: { marginTop: "10px", borderRadius: "8px", overflow: "hidden" },
   chatEmbeddedImage: { maxWidth: "100%", maxHeight: "250px", objectFit: "contain" },
-  inputContainer: { maxWidth: "700px", width: "100%", margin: "0 auto", padding: "0 16px 16px" },
+  inputContainer: { maxWidth: "700px", width: "100%", margin: "0 auto", padding: "0 16px 16px", boxSizing: "border-box" },
   previewContainer: { display: "flex", alignItems: "center", background: "#1e1f20", padding: "6px", borderRadius: "8px", width: "fit-content", marginBottom: "8px" },
   previewThumb: { width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" },
   removePreviewBtn: { background: "none", border: "none", color: "#9aa0a6", cursor: "pointer", marginLeft: "6px" },
-  inputWrapper: { display: "flex", alignItems: "center", background: "#1e1f20", borderRadius: "24px", padding: "6px 16px" },
+  inputWrapper: { display: "flex", alignItems: "center", background: "#1e1f20", borderRadius: "24px", padding: "8px 16px" },
   clipLabel: { fontSize: "20px", cursor: "pointer", marginRight: "12px", color: "#9aa0a6" },
-  input: { flex: 1, background: "transparent", border: "none", color: "#e3e3e3", fontSize: "16px", outline: "none" },
+  input: { flex: 1, background: "transparent", border: "none", color: "#e3e3e3", fontSize: "16px", outline: "none", resize: "none", fontFamily: "inherit", lineHeight: "20px", maxHeight: "100px" },
   sendBtn: { background: "none", border: "none", color: "#a8c7fa", fontSize: "20px", cursor: "pointer", marginLeft: "8px" }
 };
-                       
+        
