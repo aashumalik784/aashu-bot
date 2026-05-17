@@ -24,15 +24,37 @@ Current Live Context in India:
 - Time: ${currentTime}
 - Year: ${new Date().toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", year: "numeric" })}
 
-Rules: Respond casually, use beautiful markdown bullet points for lists, and speak naturally in Hinglish/Hindi or English.
+Rules: Respond casually, use beautiful markdown bullet points for lists, and speak naturally in Hinglish/Hindi or English. If an image or code screenshot is attached, inspect the data layout thoroughly to solve any engineering problem.
 `;
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(200).json({ 
-        reply: "⚠️ Backend Config Error: Vercel par 'GROQ_API_KEY' missing hai." 
-      });
+      return res.status(200).json({ reply: "⚠️ Backend Config Error: Vercel par 'GROQ_API_KEY' missing hai." });
     }
+
+    // Map content formats into OpenAI/Groq Vision payload structure
+    const groqMessages = [
+      { role: "system", content: personality },
+      ...(userProfile ? [{ role: "system", content: `User Profile: ${JSON.stringify(userProfile)}` }] : [])
+    ];
+
+    messages.forEach((msg) => {
+      if (msg.role === "user") {
+        const contentArray = [{ type: "text", text: msg.content || "Analyze this request" }];
+        
+        // Agar frontend se structure mein base64 image data string aaya hai
+        if (msg.image) {
+          contentArray.push({
+            type: "image_url",
+            image_url: { url: msg.image }
+          });
+        }
+        
+        groqMessages.push({ role: "user", content: contentArray });
+      } else {
+        groqMessages.push({ role: m.role, content: msg.content });
+      }
+    });
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -41,12 +63,8 @@ Rules: Respond casually, use beautiful markdown bullet points for lists, and spe
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: personality },
-          ...(userProfile ? [{ role: "system", content: `User Profile: ${JSON.stringify(userProfile)}` }] : []),
-          ...messages
-        ],
+        model: "llama-3.3-70b-versatile", // Vision and high scale reasoning support active
+        messages: groqMessages,
         temperature: 0.7
       })
     });
