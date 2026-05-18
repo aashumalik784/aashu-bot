@@ -21,24 +21,25 @@ export default async function handler(req, res) {
       });
     }
 
-    const currentTime = new Date().toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    // Image generation check
-    const imageKeywords = ['generate image', 'create image', 'draw', 'picture of', 'photo of', 'image banao', 'tasveer banao', 'portrait', 'Prompt:'];
+    // IMAGE GENERATION - IMPROVED DETECTION + LOGGING
+    const imageKeywords = ['prompt:', 'generate image', 'create image', 'draw', 'picture of', 'photo of', 'image banao', 'tasveer banao', 'portrait', 'bhej image', 'image do', 'cyberpunk', 'futuristic'];
     const isImageRequest = imageKeywords.some(kw => userMessage.toLowerCase().includes(kw));
 
-    // 1. IMAGE GENERATION - HUGGING FACE
-    if (isImageRequest && process.env.HF_TOKEN) {
+    console.log('Is Image Request:', isImageRequest, 'Message:', userMessage);
+
+    if (isImageRequest) {
+      console.log('HF_TOKEN exists:',!!process.env.HF_TOKEN);
+
+      if (!process.env.HF_TOKEN) {
+        return res.status(200).json({
+          reply: `❌ HF_TOKEN set nahi hai Vercel me.\n\nFix: Vercel → Settings → Environment Variables me HF_TOKEN add karo.`
+        });
+      }
+
       try {
-        const prompt = userMessage.replace('Prompt:', '').trim();
+        const prompt = userMessage.replace(/prompt:|bhej|image banao|tasveer banao/gi, '').trim();
+        console.log('HF Prompt:', prompt);
+
         const hfRes = await fetch('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0', {
           method: 'POST',
           headers: {
@@ -47,38 +48,48 @@ export default async function handler(req, res) {
           },
           body: JSON.stringify({
             inputs: prompt,
-            parameters: { negative_prompt: 'blurry, bad quality, distorted' }
+            parameters: { negative_prompt: 'blurry, bad quality' }
           })
         });
 
-        if (!hfRes.ok) throw new Error(`HF ${hfRes.status}: ${await hfRes.text()}`);
+        console.log('HF Status:', hfRes.status);
+
+        if (!hfRes.ok) {
+          const errText = await hfRes.text();
+          console.log('HF Error:', errText);
+          if (hfRes.status === 503) {
+            return res.status(200).json({ reply: `⏳ HF Model jag raha hai. 20 second baad phir "${prompt}" bhej.` });
+          }
+          if (hfRes.status === 401) {
+            return res.status(200).json({ reply: `❌ HF_TOKEN galat hai. huggingface.co/settings/tokens se naya bana.` });
+          }
+          if (hfRes.status === 429) {
+            return res.status(200).json({ reply: `❌ Aaj ka free quota khatam. Kal subah 5:30 AM ke baad try kar.` });
+          }
+          return res.status(200).json({ reply: `❌ HF Error ${hfRes.status}: ${errText.substring(0, 100)}` });
+        }
 
         const imageBuffer = await hfRes.arrayBuffer();
         const base64Image = Buffer.from(imageBuffer).toString('base64');
         const imageUrl = `data:image/png;base64,${base64Image}`;
+        console.log('Image generated successfully');
 
         return res.status(200).json({
-          reply: `Ye rahi aapki image:`,
+          reply: `Ye lo bhai: "${prompt}"`,
           image: imageUrl
         });
       } catch (e) {
+        console.log('HF Catch Error:', e.message);
         return res.status(200).json({
-          reply: `Image nahi bana paya 😓\nReason: ${e.message.substring(0, 150)}\n\nHuggingFace quota khatam ho sakta hai. 1 min baad try karo.`
+          reply: `❌ Image Error: ${e.message}`
         });
       }
     }
 
-    const systemPrompt = `You are Aashu AI, created by Aashu Malik. Current: ${currentTime}.
-RULES:
-1. Give accurate, concise answers. DO NOT repeat sentences.
-2. For real-time data like YouTube trends, population - say "Mere paas live data nahi hai, par latest estimate ye hai:" then answer.
-3. World population 2026 estimate: ~8.1 billion. India: ~1.45 billion.
-4. Reply in Hinglish. Use markdown for lists.
-5. NEVER add footers or repeat yourself.`;
+    const currentTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const systemPrompt = `You are Aashu AI, created by Aashu Malik. Current: ${currentTime}. Give accurate, concise Hinglish answers. Never repeat.`;
 
-    const errors = [];
-
-    // 2. GEMINI - FIXED MODEL NAME
+    // GEMINI
     if (process.env.GEMINI_API_KEY) {
       try {
         const parts = [];
@@ -89,7 +100,6 @@ RULES:
         }
         parts.push({ text: `${systemPrompt}\n\nUser: ${userMessage}` });
 
-        // FIXED: gemini-1.5-flash-latest -> gemini-1.5-flash
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -99,85 +109,46 @@ RULES:
           })
         });
 
-        if (!geminiRes.ok) throw new Error(`GEMINI ${geminiRes.status}: ${await geminiRes.text()}`);
+        if (!geminiRes.ok) throw new Error(`GEMINI ${geminiRes.status}`);
         const data = await geminiRes.json();
         const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (reply) return res.status(200).json({ reply: reply.trim() });
       } catch (e) {
-        errors.push(e.message.substring(0, 200));
+        console.log('GEMINI Error:', e.message);
       }
     }
 
-    // 3. GROQ - FIXED: IMAGE HATA DIYA
+    // GROQ
     if (process.env.GROQ_API_KEY) {
       try {
-        // FIXED: GROQ ko image nahi bhejte, sirf text
-        const groqMessages = [
-          { role: 'system', content: systemPrompt },
-        ...messages.slice(-6).map(m => ({
-            role: m.role,
-            content: m.content // image field hata diya
-          })),
-          { role: 'user', content: userMessage }
-        ];
-
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'llama-3.3-70b-versatile',
-            messages: groqMessages,
+            messages: [
+              { role: 'system', content: systemPrompt },
+          ...messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+              { role: 'user', content: userMessage }
+            ],
             temperature: 0.3,
             max_tokens: 1500
           })
         });
 
-        if (!groqRes.ok) throw new Error(`GROQ ${groqRes.status}: ${await groqRes.text()}`);
+        if (!groqRes.ok) throw new Error(`GROQ ${groqRes.status}`);
         const data = await groqRes.json();
         const reply = data?.choices?.[0]?.message?.content;
         if (reply) return res.status(200).json({ reply: reply.trim() });
       } catch (e) {
-        errors.push(e.message.substring(0, 200));
+        console.log('GROQ Error:', e.message);
       }
     }
 
-    // 4. OPENROUTER - FIXED MODEL NAME
-    if (process.env.OPENROUTER_API_KEY) {
-      try {
-        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://aashu-bot.vercel.app',
-            'X-Title': 'Aashu AI'
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-flash-1.5-8b', // Naya free model
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userMessage }
-            ],
-            temperature: 0.4
-          })
-        });
-
-        if (!orRes.ok) throw new Error(`OPENROUTER ${orRes.status}: ${await orRes.text()}`);
-        const data = await orRes.json();
-        const reply = data?.choices?.[0]?.message?.content;
-        if (reply) return res.status(200).json({ reply: reply.trim() });
-      } catch (e) {
-        errors.push(e.message.substring(0, 200));
-      }
-    }
-
-    return res.status(200).json({
-      reply: `❌ SAB API FAIL HO GAYE\n\nErrors:\n${errors.join('\n\n')}\n\nFix: Keys check karo. GEMINI_API_KEY aur GROQ_API_KEY sahi hain kya?`
-    });
+    return res.status(200).json({ reply: `❌ Sab API fail ho gaye. Keys check karo.` });
 
   } catch (err) {
-    return res.status(200).json({
-      reply: `⚠️ SERVER CRASH: ${err.message}`
-    });
+    console.log('CRASH:', err.message);
+    return res.status(200).json({ reply: `⚠️ SERVER CRASH: ${err.message}` });
   }
-        }
+    }
