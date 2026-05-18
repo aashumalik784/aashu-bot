@@ -5,17 +5,17 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method!== 'POST') return res.status(405).json({ reply: 'Only POST allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ reply: 'Only POST allowed' });
 
   try {
     const body = req.body || {};
-    const messages = Array.isArray(body.messages)? body.messages : [];
+    const messages = Array.isArray(body.messages) ? body.messages : [];
     const userMessage = body.userMessage || messages[messages.length - 1]?.content || '';
     const lowerMsg = userMessage.toLowerCase();
 
     if (!userMessage) {
       return res.status(200).json({
-        reply: 'Namaste! Main **Aashu AI Bot** hoon 😎\n\nMere features:\n✅ Image Generator\n✅ Video Generator 2-sec\n✅ Live Mausam\n✅ Crypto Price\n✅ News Updates\n✅ 2030 Tak Ka Gyaan\n\nKuch bhi poocho!'
+        reply: 'Namaste! Main **Aashu AI Bot** hoon 😎\n\nMere features:\n✅ Image Generator\n✅ Video Generator 2-sec\n✅ Live Mausam\n✅ Crypto Price\n✅ News Updates\n✅ Smart Chat\n\nKuch bhi poocho!'
       });
     }
 
@@ -33,6 +33,11 @@ export default async function handler(req, res) {
       }
       try {
         const prompt = userMessage.replace(/image banao|tasveer banao|photo banao|picture|draw|generate image|dikhaiye|portrait|banner|poster/gi, '').trim();
+        
+        if (!prompt) {
+          return res.status(200).json({ reply: '📸 Aap kis cheez ki image banana chahte hain? Please description bhi likhein (e.g., "image banao ek sher ki").' });
+        }
+
         const hfRes = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${process.env.HF_TOKEN}`, 'Content-Type': 'application/json' },
@@ -65,6 +70,11 @@ export default async function handler(req, res) {
       }
       try {
         const prompt = userMessage.replace(/video banao|video generate|animation banao|clip banao|short video|reel banao/gi, '').trim();
+        
+        if (!prompt) {
+          return res.status(200).json({ reply: '🎬 Aap kis topic par video banana chahte hain? Description zaroor likhein.' });
+        }
+
         const hfRes = await fetch('https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${process.env.HF_TOKEN}`, 'Content-Type': 'application/json' },
@@ -129,7 +139,7 @@ export default async function handler(req, res) {
         } catch (e) {}
       }
       return res.status(200).json({
-        reply: `📰 **News Update**\n\nLive news ke liye Vercel me NEWS_API_KEY add karo newsapi.org se.\n\nAbhi ke liye check karo:\n1. Google News: news.google.com\n2. AajTak: aajtak.in\n\n**2030 Estimate**: AI, Climate, Space, EV trending rahenge.`
+        reply: `📰 **News Update**\n\nLive news ke liye Vercel me NEWS_API_KEY add karo newsapi.org se.\n\nAbhi ke liye check karo:\n1. Google News: news.google.com\n2. AajTak: aajtak.in`
       });
     }
 
@@ -143,18 +153,23 @@ export default async function handler(req, res) {
       }
     }
 
-    // ==================== 7. AI CHAT - 2030 TAK KA GYAAN ====================
-    const systemPrompt = `You are Aashu AI Bot, created by Aashu Malik. Today: ${currentTime}.
-    KNOWLEDGE: Your training data is till Jan 2024. For 2024-2030, use logical reasoning and current trends.
-    RULES:
-    1. Answer in Hinglish. Be accurate and concise.
-    2. For future questions 2025-2030, start with "Bhavishya ka estimate:" then give logical prediction.
-    3. For real-time data you don't have, say "Mere paas live data nahi hai, par latest estimate ye hai:" then answer.
-    4. Never say "I don't know". Always give best estimate.
-    5. Never repeat sentences. Don't use --- or ***.
-    6. For math/coding, be 100% accurate.`;
+    // ==================== 7. AI CHAT - FIVE KEYS CONFIGURATION ====================
+    const systemPrompt = `You are Aashu AI Bot, a smart and helpful assistant created by Aashu Malik. Today: ${currentTime}.
+    
+    TONE & STYLE:
+    - Respond in a friendly, engaging, and natural Hinglish/Hindi tone (like a close peer or developer friend).
+    - Keep responses concise, accurate, and scannable. Never repeat sentences. Do not use markdown horizontal rules (---).
 
-    // GEMINI
+    LOGIC & CALCULATIONS (CRITICAL):
+    - When users ask about construction, sizes, math, or physical objects (like bricks/eent, areas, dimensions), you must think step-by-step to be 100% accurate.
+    - Fact Check: Remember that a standard brick (eent) is about 9 INCHES (0.75 feet) in length, NOT 9 feet. Break down construction math logically based on real-world dimensions.
+
+    FUTURE & REAL-TIME ESTIMATES:
+    - Your training data is till Jan 2024. For years 2024-2030, use logical reasoning and recent industry trends to provide responses.
+    - For future predictions (2025-2030), start with "Bhavishya ka estimate:".
+    - ONLY use the phrase "Mere paas live data nahi hai, par latest estimate ye hai:" if the user explicitly asks for real-time web-browsing data (like live stock prices or current today's micro-trends) that you completely lack. Do not use this disclaimer for general knowledge, text-generation, logic, or creative queries.`;
+
+    // 1. GEMINI API
     if (process.env.GEMINI_API_KEY) {
       try {
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -162,7 +177,7 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser: ${userMessage}` }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
+            generationConfig: { temperature: 0.5, maxOutputTokens: 2000 }
           })
         });
         if (geminiRes.ok) {
@@ -173,7 +188,7 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    // GROQ
+    // 2. GROQ API
     if (process.env.GROQ_API_KEY) {
       try {
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -183,10 +198,10 @@ export default async function handler(req, res) {
             model: 'llama-3.3-70b-versatile',
             messages: [
               { role: 'system', content: systemPrompt },
-            ...messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+              ...messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
               { role: 'user', content: userMessage }
             ],
-            temperature: 0.7,
+            temperature: 0.5,
             max_tokens: 2000
           })
         });
@@ -198,7 +213,30 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    // OPENROUTER BACKUP
+    // 3. COHERE API
+    if (process.env.COHERE_API_KEY) {
+      try {
+        const cohereRes = await fetch('https://api.cohere.ai/v1/chat', {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${process.env.COHERE_API_KEY}`, 
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify({
+            model: 'command-r-plus',
+            message: `${systemPrompt}\n\nUser: ${userMessage}`,
+            temperature: 0.5
+          })
+        });
+        if (cohereRes.ok) {
+          const data = await cohereRes.json();
+          const reply = data?.text;
+          if (reply) return res.status(200).json({ reply: reply.trim() });
+        }
+      } catch (e) {}
+    }
+
+    // 4. OPENROUTER BACKUP
     if (process.env.OPENROUTER_API_KEY) {
       try {
         const openRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -207,7 +245,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model: 'google/gemini-flash-1.5-8b',
             messages: [{ role: 'user', content: `${systemPrompt}\n\nUser: ${userMessage}` }],
-            temperature: 0.7,
+            temperature: 0.5,
             max_tokens: 2000
           })
         });
@@ -219,8 +257,8 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    return res.status(200).json({ reply: `❌ Sab AI fail ho gaye. Vercel me kam se kam GEMINI_API_KEY ya GROQ_API_KEY add karo.` });
+    return res.status(200).json({ reply: `❌ Sab AI fail ho gaye. Please check kijiye ki Vercel Environment Variables me sahi Keys added hain ya nahi.` });
   } catch (err) {
     return res.status(200).json({ reply: `⚠️ SERVER CRASH: ${err.message}` });
   }
-      }
+}
